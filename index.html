@@ -106,6 +106,15 @@ body {
 .dot-past     { background: #d1d5db; }
 .ann-title { font-size: 1rem; font-weight: 600; margin-top: 8px; }
 .ann-others { font-size: 0.78rem; color: var(--text-sub); margin-top: 4px; }
+.lang-divider { border: none; border-top: 1px solid var(--border); margin: 6px 0 6px; }
+.lang-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.lang-check { font-size: 0.72rem; font-weight: 600; padding: 1px 7px; border-radius: 20px; flex-shrink: 0; }
+.lang-ok { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+.lang-no { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+.lang-title-text { font-size: 0.82rem; color: var(--text-sub); }
+.lang-empty { color: #bbb; }
+.content-block { margin-bottom: 8px; }
+.content-text { font-size: 0.85rem; line-height: 1.6; white-space: pre-wrap; padding-left: 4px; margin-top: 3px; }
 .ann-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* ── 展開內容 ── */
@@ -352,7 +361,7 @@ body {
 <div class="modal-bg" id="modal-send">
   <div class="modal">
     <h3 id="modal-title">確認發送</h3>
-    <div class="field-label">公告標題</div>
+    <div class="field-label">Thread 標題</div>
     <div class="field-val" id="modal-thread"></div>
     <div class="field-label">Discord 頻道</div>
     <select id="modal-channel" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:0.9rem;margin-bottom:14px;outline:none;"></select>
@@ -606,21 +615,33 @@ function renderList() {
       const st = getStatus(parseDate(a.date, a.time));
       const bc = borderColor[st];
       const dateDisplay = a.date + (a.time ? ' ' + a.time : '');
-      const others = [a.titleCN ? `🇨🇳 ${a.titleCN}` : '', a.titleJP ? `🇯🇵 ${a.titleJP}` : '', a.titleEN ? `🇺🇸 ${a.titleEN}` : ''].filter(Boolean).join('　');
+      const mkCheck = (code, val) => val
+        ? `<div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span><span class="lang-title-text">${val}</span></div>`
+        : `<div class="lang-row"><span class="lang-check lang-no">${code} ✗</span><span class="lang-title-text lang-empty">未填寫</span></div>`;
+      const langTags =
+        '<hr class="lang-divider">' +
+        mkCheck('TW', a.titleTW) +
+        mkCheck('CN', a.titleCN) +
+        mkCheck('JP', a.titleJP) +
+        mkCheck('US', a.titleEN);
       const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
 
       // 預設發送時間（試算表時間）
       const defaultTime = a.time || '10:00';
 
       // 展開內容區
+      const mkContent = (code, val) => val
+        ? `<div class="content-block"><div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span></div><div class="content-text">${val}</div></div>`
+        : `<div class="content-block"><div class="lang-row"><span class="lang-check lang-no">${code} ✗</span></div></div>`;
       let contentHtml = '';
       if (!isDraft) {
-        contentHtml = '<div class="ann-content">';
-        if (a.contentTW) contentHtml += `<div class="content-lang">🇹🇼 繁體中文</div><div class="content-text">${a.contentTW}</div>`;
-        if (a.contentCN) contentHtml += `<div class="content-lang">🇨🇳 简体中文</div><div class="content-text">${a.contentCN}</div>`;
-        if (a.contentJP) contentHtml += `<div class="content-lang">🇯🇵 日文</div><div class="content-text">${a.contentJP}</div>`;
-        if (a.contentEN) contentHtml += `<div class="content-lang">🇺🇸 English</div><div class="content-text">${a.contentEN}</div>`;
-        contentHtml += '</div>';
+        contentHtml =
+          '<div class="ann-content">' +
+          mkContent('TW', a.contentTW) +
+          mkContent('CN', a.contentCN) +
+          mkContent('JP', a.contentJP) +
+          mkContent('US', a.contentEN) +
+          '</div>';
       }
 
       html += `
@@ -633,7 +654,7 @@ function renderList() {
     ${!isDraft ? '<span class="expand-arrow">▼</span>' : ''}
   </div>
   <div class="ann-title">${a.titleTW || '（無標題）'}</div>
-  ${others ? `<div class="ann-others">${others}</div>` : ''}
+  ${langTags}
   ${a.image && a.image !== '...' ? `<div style="margin-top:5px;font-size:0.75rem;" onclick="event.stopPropagation()"><a href="${a.image}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a></div>` : ''}
   ${contentHtml}
   ${!isDraft ? `
