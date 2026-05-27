@@ -483,8 +483,8 @@ function renderList() {
       const st = getStatus(parseDate(a.date, a.time));
       const bc = borderColor[st];
       const dateDisplay = a.date + (a.time ? ' ' + a.time : '');
-      const others = [a.titleJP ? `🇯🇵 ${a.titleJP}` : '', a.titleEN ? `🇺🇸 ${a.titleEN}` : ''].filter(Boolean).join('　');
-      const isDraft = !a.contentTW && !a.contentJP && !a.contentEN;
+      const others = [a.titleCN ? `🇨🇳 ${a.titleCN}` : '', a.titleJP ? `🇯🇵 ${a.titleJP}` : '', a.titleEN ? `🇺🇸 ${a.titleEN}` : ''].filter(Boolean).join('　');
+      const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
 
       // 預設發送時間（試算表時間）
       const defaultTime = a.time || '10:00';
@@ -541,6 +541,7 @@ function openSendModal(ann, defaultTime) {
 
   let content = [];
   if (ann.titleTW || ann.contentTW) content.push([ann.titleTW, ann.contentTW].filter(Boolean).join('\n'));
+  if (ann.titleCN || ann.contentCN) content.push([ann.titleCN, ann.contentCN].filter(Boolean).join('\n'));
   if (ann.titleJP || ann.contentJP) content.push([ann.titleJP, ann.contentJP].filter(Boolean).join('\n'));
   if (ann.titleEN || ann.contentEN) content.push([ann.titleEN, ann.contentEN].filter(Boolean).join('\n'));
   let contentStr = content.join('\n\n---\n\n');
