@@ -974,7 +974,7 @@ function addLang(ti) {
 
 function addAnnouncementType() {
   const types = getTypes();
-  types.push({ name: '新類型', langs: [{ lang: 'TW', webhook: '' }] });
+  types.push({ name: '新類型', langs: [{ lang: 'all', webhook: '' }] });
   saveTypes(types);
   renderAnnouncementTypes(types);
 }
