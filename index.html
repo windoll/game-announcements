@@ -425,7 +425,7 @@ function badgeClass(type) {
   return 'badge-other';
 }
 const borderColor = {today:'#10b981', upcoming:'#f59e0b', past:'#e0e0e0'};
-const statusOrder = {today:0, upcoming:1, past:2};
+const statusOrder = {upcoming:0, today:1, past:2};
 const statusLabel = {today:'📅 今日', upcoming:'⏰ 未來排程', past:'✓ 已過期'};
 
 // ── 渲染列表 ──────────────────────────────────────────────────
@@ -471,7 +471,7 @@ function renderList() {
   });
 
   let html = '';
-  ['today','upcoming','past'].forEach(s => {
+  ['upcoming','today','past'].forEach(s => {
     if (!groups[s]?.length) return;
     html += `<div class="sec-label">${statusLabel[s]}（${groups[s].length}）</div>`;
     groups[s].forEach((a, i) => {
