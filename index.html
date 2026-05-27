@@ -310,10 +310,10 @@ body {
 
       <div class="card" style="margin-top:0;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div style="font-weight:600;font-size:0.95rem;">📢 Discord 頻道</div>
-          <button class="btn btn-outline btn-sm" onclick="addChannel()">＋ 新增頻道</button>
+          <div style="font-weight:600;font-size:0.95rem;">📢 Discord 頻道設定</div>
+          <button class="btn btn-outline btn-sm" onclick="addAnnouncementType()">＋ 新增類型</button>
         </div>
-        <div id="cfg-channels"></div>
+        <div id="cfg-announcement-types"></div>
         <div style="font-size:0.75rem;color:#888;margin-top:8px;">Webhook URL 格式：https://discord.com/api/webhooks/...</div>
       </div>
 
@@ -362,11 +362,19 @@ const DEFAULTS = {
   projectName: '雀星公告管理',
   sheetId:     '1zAThMoAwT2Y4x4ZjvNkdLSwWI9-tHj0XuvVASNCoOjw',
   sheetGid:    '1281351206',
-  channels:    [
-    { name: '維護頻道',   webhook: '', defaultLang: 'all' },
-    { name: '活動TW頻道', webhook: '', defaultLang: 'TW'  },
-    { name: '活動JP頻道', webhook: '', defaultLang: 'JP'  },
-    { name: '活動EN頻道', webhook: '', defaultLang: 'EN'  },
+  announcementTypes: [
+    {
+      name: '維護更新',
+      langs: [{ lang: 'all', webhook: '' }]
+    },
+    {
+      name: '活動公告',
+      langs: [
+        { lang: 'TW', webhook: '' },
+        { lang: 'JP', webhook: '' },
+        { lang: 'EN', webhook: '' },
+      ]
+    }
   ],
 };
 const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
@@ -665,51 +673,64 @@ function openSendModal(ann, defaultTime) {
   let contentStr = content.join('\n\n---\n\n');
   if (ann.image && ann.image !== '...') contentStr += '\n\n' + ann.image;
 
-  // 填入語系複選列
-  const channels = getCfg().channels || [];
-  const type = ann.type || '';
-  const isMaintenance = type.includes('維護');
-  const isEvent = type.includes('活動');
+  // 自動比對公告類型（模糊比對：annType 包含設定的類型名稱）
+  const annType = ann.type || '';
+  const announcementTypes = getCfg().announcementTypes || [];
+  const matchedType = announcementTypes.find(t => annType.includes(t.name) || t.name.includes(annType));
 
-  // 根據頻道的 defaultLang 欄位找對應 index
-  // 維護類：找 defaultLang === 'all' 的頻道；活動類：找 defaultLang === lang 的頻道
-  // fallback: 找不到就用 index 0
-  const defIdx = (lang) => {
-    if (isMaintenance) {
-      const idx = channels.findIndex(ch => ch.defaultLang === 'all');
-      return idx >= 0 ? idx : 0;
-    }
-    if (isEvent) {
-      const idx = channels.findIndex(ch => ch.defaultLang === lang);
-      return idx >= 0 ? idx : 0;
-    }
-    return 0;
-  };
+  // 建立語系→webhook 對照表
+  // 若類型有 'all'，代表所有語系都發到同一個 webhook
+  window._modalMessages = [];
 
-  const langs = [
-    { code: 'TW', title: ann.titleTW, content: ann.contentTW },
-    { code: 'JP', title: ann.titleJP, content: ann.contentJP },
-    { code: 'EN', title: ann.titleEN, content: ann.contentEN },
+  const langDefs = [
+    { code: 'TW', title: ann.titleTW || '', content: ann.contentTW || '' },
+    { code: 'JP', title: ann.titleJP || '', content: ann.contentJP || '' },
+    { code: 'EN', title: ann.titleEN || '', content: ann.contentEN || '' },
   ];
 
-  const chOptions = channels.length
-    ? channels.map((ch, i) => `<option value="${i}">${ch.name || '頻道 ' + (i+1)}</option>`).join('')
-    : '<option value="-1">（尚未設定頻道）</option>';
+  let rowsHtml = '';
+  if (!matchedType) {
+    rowsHtml = `<div style="color:#ef4444;font-size:0.85rem;padding:8px;background:#fef2f2;border-radius:8px;">⚠️ 找不到符合「${annType}」的頻道類型，請先至設定頁新增對應類型</div>`;
+  } else {
+    const hasAll = matchedType.langs.some(l => l.lang === 'all');
+    rowsHtml = langDefs.map(({ code, title, content }) => {
+      const hasContent = !!(title || content);
+      let langEntry;
+      if (hasAll) {
+        langEntry = matchedType.langs.find(l => l.lang === 'all');
+      } else {
+        langEntry = matchedType.langs.find(l => l.lang === code);
+      }
+      const webhook = langEntry ? langEntry.webhook : '';
+      const hasWebhook = !!(webhook);
 
-  const rowsHtml = langs.map(({ code, title, content }) => {
-    const hasContent = title || content;
-    const checked = hasContent ? 'checked' : '';
-    const di = defIdx(code);
-    const opts = channels.map((ch, i) =>
-      `<option value="${i}" ${i === di ? 'selected' : ''}>${ch.name || '頻道 ' + (i+1)}</option>`
-    ).join('') || '<option value="-1">（尚未設定頻道）</option>';
-    return `
-      <div style="display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="lang-chk-${code}" ${checked} style="width:16px;height:16px;cursor:pointer;">
-        <label for="lang-chk-${code}" style="width:28px;font-weight:600;font-size:0.85rem;cursor:pointer;">${code}</label>
-        <select id="lang-sel-${code}" style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-size:0.85rem;outline:none;">${opts}</select>
+      // 只有有內容的語系才加入發送清單
+      if (hasContent && hasWebhook) {
+        window._modalMessages.push({ code, title, content, webhook, typeName: matchedType.name });
+      }
+
+      let statusLabel, statusStyle;
+      if (!hasContent) {
+        statusLabel = '（無內容，略過）';
+        statusStyle = 'color:#aaa;';
+      } else if (!langEntry) {
+        statusLabel = '⚠️ 此類型未設定此語系';
+        statusStyle = 'color:#ef4444;';
+      } else if (!hasWebhook) {
+        statusLabel = '⚠️ Webhook 未填入';
+        statusStyle = 'color:#ef4444;';
+      } else {
+        statusLabel = `→ ${matchedType.name}`;
+        statusStyle = 'color:#16a34a;';
+      }
+
+      return `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+        <span style="width:28px;font-weight:700;font-size:0.85rem;">${code}</span>
+        <span style="flex:1;font-size:0.85rem;${statusStyle}">${statusLabel}</span>
       </div>`;
-  }).join('');
+    }).join('');
+  }
 
   document.getElementById('modal-lang-rows').innerHTML = rowsHtml;
 
@@ -773,36 +794,17 @@ async function confirmSend() {
   if (!dateVal || !hourVal || !minVal) { toast('⚠️ 請選擇發送日期與時間'); return; }
   const timeVal = hourVal + ':' + minVal;
 
-  // 收集勾選的語系與對應頻道
-  const channels = getCfg().channels || [];
-  const langDefs = [
-    { code: 'TW', title: pendingAnn.titleTW || '', content: pendingAnn.contentTW || '' },
-    { code: 'JP', title: pendingAnn.titleJP || '', content: pendingAnn.contentJP || '' },
-    { code: 'EN', title: pendingAnn.titleEN || '', content: pendingAnn.contentEN || '' },
-  ];
-
-  const messages = [];
-  for (const lang of langDefs) {
-    const chk = document.getElementById('lang-chk-' + lang.code);
-    if (!chk || !chk.checked) continue;
-    const selEl = document.getElementById('lang-sel-' + lang.code);
-    const chIdx = parseInt(selEl ? selEl.value : '-1');
-    const ch = (chIdx >= 0 && chIdx < channels.length) ? channels[chIdx] : null;
-    if (!ch || !ch.webhook) {
-      toast(`⚠️ ${lang.code} 的頻道尚未設定 Webhook URL，請先至設定頁填入`);
-      return;
-    }
-    messages.push({
-      lang:        lang.code,
-      title:       lang.title,
-      content:     lang.content,
-      webhook:     ch.webhook,
-      channelName: ch.name || '',
-    });
-  }
+  // 從 openSendModal 預先比對好的結果取得發送清單
+  const messages = (window._modalMessages || []).map(m => ({
+    lang:        m.code,
+    title:       m.title,
+    content:     m.content,
+    webhook:     m.webhook,
+    channelName: m.typeName || '',
+  }));
 
   if (messages.length === 0) {
-    toast('⚠️ 請至少勾選一個語系');
+    toast('⚠️ 沒有可發送的語系，請確認設定頁的頻道類型與 Webhook 是否正確');
     return;
   }
 
@@ -855,78 +857,113 @@ function loadSettings() {
   document.getElementById('cfg-project-name').value = cfg.projectName || '';
   document.getElementById('cfg-sheet-id').value     = cfg.sheetId    || '';
   document.getElementById('cfg-sheet-gid').value    = cfg.sheetGid   || '';
-  renderChannels(cfg.channels || []);
+  renderAnnouncementTypes(cfg.announcementTypes || []);
 }
 
-// 渲染頻道列表
-function renderChannels(channels) {
-  const el = document.getElementById('cfg-channels');
-  if (!channels.length) {
-    el.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:8px 0;">尚無頻道，點右上角「新增頻道」</div>';
+// ── 公告類型設定 ──────────────────────────────────────────────
+
+function saveTypes(types) {
+  const cfg = getCfg();
+  localStorage.setItem('ann-cfg', JSON.stringify(Object.assign({}, cfg, { announcementTypes: types })));
+}
+
+function getTypes() {
+  return getCfg().announcementTypes || [];
+}
+
+function renderAnnouncementTypes(types) {
+  const el = document.getElementById('cfg-announcement-types');
+  if (!types.length) {
+    el.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:8px 0;">尚無類型，點右上角「新增類型」</div>';
     return;
   }
-  const langOpts = ['all','TW','JP','EN'].map(v =>
-    `<option value="${v}">${v === 'all' ? '全部（維護用）' : v}</option>`
-  ).join('');
-  el.innerHTML = channels.map((ch, i) => {
-    const dl = ch.defaultLang || 'TW';
-    const opts = ['all','TW','JP','EN'].map(v =>
-      `<option value="${v}" ${v === dl ? 'selected' : ''}>${v === 'all' ? '全部（維護用）' : v}</option>`
-    ).join('');
+
+  const LANG_OPTS = ['all', 'TW', 'JP', 'EN'];
+
+  el.innerHTML = types.map((t, ti) => {
+    const hasAll = t.langs.some(l => l.lang === 'all');
+    const usedLangs = t.langs.map(l => l.lang);
+    const canAddLang = !hasAll && usedLangs.length < 4;
+
+    const langRows = t.langs.map((l, li) => {
+      // 語系下拉：只顯示目前未被使用的選項 + 自己本身
+      const availOpts = LANG_OPTS.filter(v => v === l.lang || !usedLangs.includes(v));
+      const opts = availOpts.map(v =>
+        `<option value="${v}" ${v === l.lang ? 'selected' : ''}>${v === 'all' ? '全部' : v}</option>`
+      ).join('');
+      return `
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+  <select onchange="updateTypeLang(${ti},${li},'lang',this.value)"
+    style="flex:0 0 80px;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:0.85rem;outline:none;">${opts}</select>
+  <input type="text" value="${escHtml(l.webhook)}" placeholder="https://discord.com/api/webhooks/..."
+    oninput="updateTypeLang(${ti},${li},'webhook',this.value)"
+    style="flex:1;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.8rem;font-family:monospace;outline:none;">
+  <button onclick="removeLang(${ti},${li})" title="刪除此語系"
+    style="background:none;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:0.8rem;">✕</button>
+</div>`;
+    }).join('');
+
     return `
-<div class="ch-row" id="ch-${i}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;">
-  <div style="flex:0 0 110px;">
-    <div class="field-label">頻道名稱</div>
-    <input type="text" value="${escHtml(ch.name)}" placeholder="例：公告頻道"
-      oninput="updateChannel(${i},'name',this.value)"
-      style="width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.85rem;outline:none;">
+<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+    <input type="text" value="${escHtml(t.name)}" placeholder="類型名稱（例：維護更新）"
+      oninput="updateTypeName(${ti},this.value)"
+      style="flex:1;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.9rem;font-weight:600;outline:none;">
+    ${canAddLang ? `<button onclick="addLang(${ti})" style="background:none;border:1px solid #6366f1;color:#6366f1;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.8rem;">＋ 語系</button>` : ''}
+    <button onclick="removeType(${ti})" title="刪除此類型"
+      style="background:none;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.8rem;">✕ 刪除</button>
   </div>
-  <div style="flex:0 0 120px;">
-    <div class="field-label">預設語系</div>
-    <select onchange="updateChannel(${i},'defaultLang',this.value)"
-      style="width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.85rem;outline:none;">${opts}</select>
-  </div>
-  <div style="flex:1;">
-    <div class="field-label">Webhook URL</div>
-    <input type="text" value="${escHtml(ch.webhook)}" placeholder="https://discord.com/api/webhooks/..."
-      oninput="updateChannel(${i},'webhook',this.value)"
-      style="width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.82rem;font-family:monospace;outline:none;">
-  </div>
-  <button onclick="removeChannel(${i})" title="刪除此頻道"
-    style="flex-shrink:0;background:none;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:0.8rem;">✕</button>
+  ${langRows}
 </div>`;
   }).join('');
 }
 
-// 暫存頻道編輯（存回 localStorage 即時更新）
-let _cfgChannels = [];
-function syncChannelsFromForm() {
-  const cfg = getCfg();
-  _cfgChannels = cfg.channels ? [...cfg.channels] : [];
-}
-function updateChannel(i, field, val) {
-  const cfg = getCfg();
-  const chs = cfg.channels ? [...cfg.channels] : [];
-  if (!chs[i]) return;
-  chs[i] = { ...chs[i], [field]: val };
-  const updated = Object.assign({}, cfg, { channels: chs });
-  localStorage.setItem('ann-cfg', JSON.stringify(updated));
+function updateTypeName(ti, val) {
+  const types = getTypes();
+  if (!types[ti]) return;
+  types[ti].name = val;
+  saveTypes(types);
 }
 
-function addChannel() {
-  const cfg = getCfg();
-  const chs = [...(cfg.channels || []), { name: '新頻道', webhook: '', defaultLang: 'TW' }];
-  const updated = Object.assign({}, cfg, { channels: chs });
-  localStorage.setItem('ann-cfg', JSON.stringify(updated));
-  renderChannels(chs);
+function updateTypeLang(ti, li, field, val) {
+  const types = getTypes();
+  if (!types[ti] || !types[ti].langs[li]) return;
+  types[ti].langs[li][field] = val;
+  saveTypes(types);
+  renderAnnouncementTypes(types); // 重繪以更新可用語系選項
 }
 
-function removeChannel(i) {
-  const cfg = getCfg();
-  const chs = (cfg.channels || []).filter((_, idx) => idx !== i);
-  const updated = Object.assign({}, cfg, { channels: chs });
-  localStorage.setItem('ann-cfg', JSON.stringify(updated));
-  renderChannels(chs);
+function removeLang(ti, li) {
+  const types = getTypes();
+  if (!types[ti]) return;
+  types[ti].langs.splice(li, 1);
+  saveTypes(types);
+  renderAnnouncementTypes(types);
+}
+
+function addLang(ti) {
+  const types = getTypes();
+  if (!types[ti]) return;
+  const usedLangs = types[ti].langs.map(l => l.lang);
+  const available = ['TW', 'JP', 'EN', 'all'].find(v => !usedLangs.includes(v));
+  if (!available) return;
+  types[ti].langs.push({ lang: available, webhook: '' });
+  saveTypes(types);
+  renderAnnouncementTypes(types);
+}
+
+function addAnnouncementType() {
+  const types = getTypes();
+  types.push({ name: '新類型', langs: [{ lang: 'TW', webhook: '' }] });
+  saveTypes(types);
+  renderAnnouncementTypes(types);
+}
+
+function removeType(ti) {
+  const types = getTypes();
+  types.splice(ti, 1);
+  saveTypes(types);
+  renderAnnouncementTypes(types);
 }
 
 function saveSettings() {
@@ -942,7 +979,7 @@ function saveSettings() {
     projectName: name || DEFAULTS.projectName,
     sheetId:     sid,
     sheetGid:    sgid,
-    // channels 已即時寫入，不需要再讀表單
+    // announcementTypes 已即時寫入，不需要再讀表單
   });
   localStorage.setItem('ann-cfg', JSON.stringify(updated));
 
