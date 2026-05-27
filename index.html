@@ -325,14 +325,37 @@ async function loadSheet() {
     // fallback 位置
     if (ix.date === -1) Object.assign(ix, {date:0,time:1,type:2,image:3,titleTW:4,contentTW:5,titleJP:6,contentJP:7,titleEN:8,contentEN:9});
 
+    // gviz 日期欄位傳回 "Date(yyyy,m,d)" (月份 0-based)
+    // gviz 時間欄位傳回 "Date(1899,11,30,h,min,s)"
+    const getDate = (row, i) => {
+      if (i < 0 || !row.c || !row.c[i] || row.c[i].v === null) return '';
+      const v = String(row.c[i].v);
+      const m = v.match(/Date\((\d+),(\d+),(\d+)/);
+      if (m) return `${parseInt(m[2])+1}/${m[3]}`; // 轉成 M/D
+      return v;
+    };
+    const getTime = (row, i) => {
+      if (i < 0 || !row.c || !row.c[i] || row.c[i].v === null) return '';
+      const v = String(row.c[i].v);
+      // gviz 時間格式 "Date(1899,11,30,h,min,s)"
+      const m = v.match(/Date\(\d+,\d+,\d+,(\d+),(\d+)/);
+      if (m) return `${m[1].padStart(2,'0')}:${m[2].padStart(2,'0')}`;
+      // 純數字（小數，代表一天的比例）
+      if (!isNaN(v) && v !== '') {
+        const totalMin = Math.round(parseFloat(v) * 24 * 60);
+        const h = Math.floor(totalMin / 60), min = totalMin % 60;
+        return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+      }
+      return v;
+    };
     const get = (row, i) => {
       if (i < 0 || !row.c || !row.c[i] || row.c[i].v === null) return '';
-      return String(row.c[i].v);
+      return String(row.c[i].f ?? row.c[i].v); // 優先用格式化值 f
     };
 
     allData = (tbl.rows || [])
       .map(row => ({
-        date: get(row, ix.date), time: get(row, ix.time),
+        date: getDate(row, ix.date), time: getTime(row, ix.time),
         type: get(row, ix.type), image: get(row, ix.image),
         titleTW: get(row, ix.titleTW), contentTW: get(row, ix.contentTW),
         titleJP: get(row, ix.titleJP), contentJP: get(row, ix.contentJP),
