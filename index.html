@@ -165,21 +165,6 @@ body {
 }
 .time-input-row input[type=time]:focus { border-color: #a5b4fc; }
 
-/* ── 排程狀態 ── */
-.schedule-item {
-  background: var(--card); border-radius: 12px;
-  padding: 14px 18px; margin-bottom: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-}
-.schedule-item .si-info { flex: 1; min-width: 200px; }
-.schedule-item .si-title { font-weight: 600; font-size: 0.95rem; }
-.schedule-item .si-time  { font-size: 0.8rem; color: var(--text-sub); margin-top: 3px; }
-.schedule-tag {
-  font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 20px;
-}
-.tag-waiting  { background: #fef3c7; color: #92400e; }
-.tag-done     { background: #d1fae5; color: #065f46; }
 
 /* ── 通知 toast ── */
 #toast {
@@ -265,7 +250,6 @@ body {
   <nav class="sidebar">
     <h2>🀄 雀星公告管理</h2>
     <button class="nav-btn active" onclick="showPage('list')">📋 公告列表</button>
-    <button class="nav-btn" onclick="showPage('schedule')">⏰ 排程狀態</button>
     <button class="nav-btn" onclick="showPage('settings')">⚙️ 設定</button>
   </nav>
 
@@ -339,21 +323,6 @@ body {
       </div>
     </div>
 
-    <!-- ② 排程狀態 -->
-    <div id="page-schedule" class="page">
-      <div class="page-title">排程狀態</div>
-      <div class="page-sub">目前透過 n8n 設定等待發送的公告</div>
-
-      <div class="card" style="background:#fffbeb;border:1px solid #fcd34d;">
-        <div style="font-size:0.85rem;color:#92400e;line-height:1.6;">
-          💡 每筆排程對應一次 n8n 執行，下方顯示近期的排程紀錄。
-          若要取消排程，請至 <a href="https://charlie98783.app.n8n.cloud/workflow/HnQhat49evgi34vQ" target="_blank" style="color:#4f46e5;">n8n 執行記錄</a> 手動刪除。
-        </div>
-      </div>
-
-      <div id="schedule-area"><div class="loading">⏳ 載入中...</div></div>
-    </div>
-
   </main>
 </div>
 
@@ -361,7 +330,7 @@ body {
 <div class="modal-bg" id="modal-send">
   <div class="modal">
     <h3 id="modal-title">確認發送</h3>
-    <div class="field-label">Thread 標題</div>
+    <div class="field-label">公告標題</div>
     <div class="field-val" id="modal-thread"></div>
     <div class="field-label">Discord 頻道</div>
     <select id="modal-channel" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:0.9rem;margin-bottom:14px;outline:none;"></select>
@@ -393,7 +362,6 @@ const DEFAULTS = {
 const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
 const SECRET_TOKEN       = 'zx9k-Q7mP-4rNw-Hj2T';
 const N8N_WEBHOOK        = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
-const N8N_SCHEDULES      = 'https://charlie98783.app.n8n.cloud/webhook/get-schedules';
 
 // ── 從 localStorage 讀取設定 ──────────────────────────────────
 function getCfg() {
@@ -447,7 +415,6 @@ function showPage(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   event.currentTarget.classList.add('active');
-  if (name === 'schedule') loadSchedule();
   if (name === 'settings') loadSettings();
 }
 
@@ -773,78 +740,6 @@ async function confirmSend() {
   }
 }
 
-// ── 排程狀態 ──────────────────────────────────────────────────
-async function loadSchedule() {
-  document.getElementById('schedule-area').innerHTML = '<div class="loading">⏳ 載入排程資料...</div>';
-
-  try {
-    const res = await fetch(N8N_SCHEDULES, {
-      headers: { 'X-Secret': SECRET_TOKEN }
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const text = await res.text();
-    if (!text || !text.trim()) {
-      renderScheduleRows([]);
-      return;
-    }
-    const data = JSON.parse(text);
-    // data 可能是陣列、{ data: [...] } 或單一物件
-    let rows = Array.isArray(data) ? data : (data.data || (data.id ? [data] : []));
-    renderScheduleRows(rows);
-  } catch (e) {
-    document.getElementById('schedule-area').innerHTML =
-      `<div class="card" style="text-align:center;padding:24px;color:#ef4444;">❌ 無法載入排程資料：${e.message}</div>`;
-  }
-}
-
-function renderScheduleRows(rows) {
-  const now = new Date();
-
-  if (!rows.length) {
-    document.getElementById('schedule-area').innerHTML =
-      '<div class="card" style="text-align:center;padding:32px;color:#888;">目前沒有任何排程記錄</div>';
-    return;
-  }
-
-  // 按 scheduled_at 降冪排序
-  rows.sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
-
-  const waiting = rows.filter(r => r.status === 'waiting');
-  const sent    = rows.filter(r => r.status === 'sent');
-
-  let html = '';
-
-  if (waiting.length) {
-    html += '<div class="sec-label">⏰ 等待發送中</div>';
-    waiting.forEach(r => { html += scheduleItemHtml(r, now); });
-  }
-
-  if (sent.length) {
-    html += '<div class="sec-label" style="margin-top:20px;">✅ 已發送</div>';
-    sent.forEach(r => { html += scheduleItemHtml(r, now); });
-  }
-
-  document.getElementById('schedule-area').innerHTML = html;
-}
-
-function scheduleItemHtml(r, now) {
-  const dt = new Date(r.scheduled_at);
-  const isPast = dt < now;
-  const statusTag = r.status === 'sent'
-    ? '<span class="schedule-tag tag-done">已發送</span>'
-    : (isPast ? '<span class="schedule-tag tag-done">已發送（待確認）</span>' : '<span class="schedule-tag tag-waiting">等待中</span>');
-  const titleDisplay = r.title_tw || r.title_jp || r.title_en || '（無標題）';
-  const others = [r.title_jp, r.title_en].filter(Boolean).join(' / ');
-  return `
-<div class="schedule-item">
-  <div class="si-info">
-    <div class="si-title">【${r.date || ''}】${titleDisplay}</div>
-    ${others ? `<div style="font-size:0.78rem;color:#888;margin-top:2px;">${others}</div>` : ''}
-    <div class="si-time">發送時間：${dt.toLocaleString('zh-TW', {timeZone:'Asia/Taipei'})}</div>
-  </div>
-  ${statusTag}
-</div>`;
-}
 
 // ── Toast 通知 ────────────────────────────────────────────────
 function toast(msg) {
