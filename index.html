@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>遊戲公告管理</title>
+<style>
+:root {
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --green: #10b981;
+  --yellow: #f59e0b;
+  --red: #ef4444;
+  --gray: #6b7280;
+  --bg: #f5f6fa;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --text: #111827;
+  --text-sub: #6b7280;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── 側邊欄 ── */
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px; background: #1e1b4b; color: white;
+  padding: 24px 16px; display: flex; flex-direction: column; gap: 6px;
+  flex-shrink: 0;
+}
+.sidebar h2 { font-size: 1rem; font-weight: 700; margin-bottom: 16px; color: #c7d2fe; padding: 0 8px; }
+.nav-btn {
+  background: none; border: none; color: #c7d2fe;
+  padding: 10px 12px; border-radius: 8px; text-align: left;
+  cursor: pointer; font-size: 0.88rem; font-weight: 500;
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.08); color: white; }
+.nav-btn.active { background: var(--primary); color: white; }
+
+/* ── 主內容 ── */
+.main { flex: 1; padding: 28px; overflow-y: auto; }
+.page { display: none; }
+.page.active { display: block; }
+
+.page-title {
+  font-size: 1.3rem; font-weight: 700; margin-bottom: 6px;
+}
+.page-sub { font-size: 0.82rem; color: var(--text-sub); margin-bottom: 24px; }
+
+/* ── 卡片 ── */
+.card {
+  background: var(--card); border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px;
+  margin-bottom: 16px;
+}
+
+/* ── 統計列 ── */
+.stats { display: flex; gap: 14px; margin-bottom: 24px; }
+.stat {
+  flex: 1; background: var(--card); border-radius: 12px;
+  padding: 16px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.stat .lbl { font-size: 0.75rem; color: var(--text-sub); margin-bottom: 4px; }
+.stat .val { font-size: 1.8rem; font-weight: 700; }
+.stat.s-all .val { color: var(--primary); }
+.stat.s-today .val { color: var(--green); }
+.stat.s-future .val { color: var(--yellow); }
+
+/* ── 篩選列 ── */
+.filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.filters input, .filters select {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 12px; font-size: 0.85rem; background: var(--card); outline: none;
+}
+.filters input { flex: 1; min-width: 160px; }
+.filters input:focus { border-color: #a5b4fc; }
+
+/* ── 公告卡片 ── */
+.ann-card {
+  background: var(--card); border-radius: 12px;
+  border-left: 4px solid var(--border);
+  padding: 14px 18px; margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: box-shadow 0.15s;
+}
+.ann-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.09); }
+.ann-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ann-date { font-size: 0.85rem; font-weight: 600; color: #444; }
+.badge {
+  font-size: 0.72rem; font-weight: 600;
+  padding: 3px 10px; border-radius: 20px; white-space: nowrap;
+}
+.badge-done   { background: #d1fae5; color: #065f46; }
+.badge-notice { background: #fee2e2; color: #991b1b; }
+.badge-event  { background: #dbeafe; color: #1e40af; }
+.badge-other  { background: #f3f4f6; color: #374151; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot-today    { background: var(--green); }
+.dot-upcoming { background: var(--yellow); }
+.dot-past     { background: #d1d5db; }
+.ann-title { font-size: 1rem; font-weight: 600; margin-top: 8px; }
+.ann-others { font-size: 0.78rem; color: var(--text-sub); margin-top: 4px; }
+.ann-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── 按鈕 ── */
+.btn {
+  border: none; border-radius: 8px; padding: 8px 16px;
+  cursor: pointer; font-size: 0.83rem; font-weight: 600;
+  transition: opacity 0.15s, transform 0.1s; display: inline-flex; align-items: center; gap: 5px;
+}
+.btn:hover { opacity: 0.85; }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-green   { background: var(--green); color: white; }
+.btn-outline { background: white; color: var(--text); border: 1px solid var(--border); }
+.btn-sm { padding: 6px 12px; font-size: 0.78rem; }
+
+/* ── 時間輸入 ── */
+.time-input-row {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px;
+}
+.time-input-row input[type=time] {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px; font-size: 0.85rem; outline: none;
+  background: var(--card);
+}
+.time-input-row input[type=time]:focus { border-color: #a5b4fc; }
+
+/* ── 排程狀態 ── */
+.schedule-item {
+  background: var(--card); border-radius: 12px;
+  padding: 14px 18px; margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.schedule-item .si-info { flex: 1; min-width: 200px; }
+.schedule-item .si-title { font-weight: 600; font-size: 0.95rem; }
+.schedule-item .si-time  { font-size: 0.8rem; color: var(--text-sub); margin-top: 3px; }
+.schedule-tag {
+  font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 20px;
+}
+.tag-waiting  { background: #fef3c7; color: #92400e; }
+.tag-done     { background: #d1fae5; color: #065f46; }
+
+/* ── 通知 toast ── */
+#toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px);
+  background: #1e1b4b; color: white; padding: 12px 24px; border-radius: 10px;
+  font-size: 0.88rem; font-weight: 500; opacity: 0;
+  transition: transform 0.3s, opacity 0.3s; pointer-events: none; z-index: 999;
+  white-space: nowrap;
+}
+#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* ── 空狀態 ── */
+.empty { text-align: center; padding: 40px; color: #bbb; font-size: 0.9rem; }
+.loading { text-align: center; padding: 32px; color: var(--text-sub); font-size: 0.88rem; }
+
+/* ── section label ── */
+.sec-label {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+  color: #bbb; margin: 20px 0 8px;
+}
+
+/* ── 彈窗 ── */
+.modal-bg {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.35); z-index: 100;
+  align-items: center; justify-content: center;
+}
+.modal-bg.open { display: flex; }
+.modal {
+  background: white; border-radius: 16px; padding: 28px;
+  width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+.modal h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.field-label { font-size: 0.8rem; font-weight: 600; color: var(--text-sub); margin-bottom: 5px; }
+.field-val {
+  font-size: 0.88rem; line-height: 1.6; white-space: pre-wrap;
+  background: #f9fafb; border-radius: 8px; padding: 10px 12px;
+  border: 1px solid var(--border); margin-bottom: 14px;
+  max-height: 140px; overflow-y: auto;
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- 側邊欄 -->
+  <nav class="sidebar">
+    <h2>📢 公告管理</h2>
+    <button class="nav-btn active" onclick="showPage('list')">📋 公告列表</button>
+    <button class="nav-btn" onclick="showPage('schedule')">⏰ 排程狀態</button>
+  </nav>
+
+  <!-- 主內容 -->
+  <main class="main">
+
+    <!-- ① 公告列表 -->
+    <div id="page-list" class="page active">
+      <div class="page-title">公告列表</div>
+      <div class="page-sub" id="list-updated">載入中...</div>
+
+      <div class="stats">
+        <div class="stat s-all"><div class="lbl">全部公告</div><div class="val" id="s-total">–</div></div>
+        <div class="stat s-today"><div class="lbl">今日公告</div><div class="val" id="s-today">–</div></div>
+        <div class="stat s-future"><div class="lbl">未來排程</div><div class="val" id="s-future">–</div></div>
+      </div>
+
+      <div class="filters">
+        <input type="text" id="q" placeholder="搜尋標題或日期..." oninput="renderList()">
+        <select id="tf" onchange="renderList()">
+          <option value="">全部類型</option>
+          <option value="維護完成">維護完成</option>
+          <option value="維護預告">維護預告</option>
+          <option value="活動公告">活動公告</option>
+        </select>
+        <select id="sf" onchange="renderList()">
+          <option value="all">全部時間</option>
+          <option value="today">今日</option>
+          <option value="upcoming">未來</option>
+          <option value="past">過去</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="loadSheet()">↻ 重新整理</button>
+      </div>
+
+      <div id="list-area"><div class="loading">⏳ 正在讀取試算表...</div></div>
+    </div>
+
+    <!-- ② 排程狀態 -->
+    <div id="page-schedule" class="page">
+      <div class="page-title">排程狀態</div>
+      <div class="page-sub">目前透過 n8n 設定等待發送的公告</div>
+
+      <div class="card" style="background:#fffbeb;border:1px solid #fcd34d;">
+        <div style="font-size:0.85rem;color:#92400e;line-height:1.6;">
+          💡 每筆排程對應一次 n8n 執行，下方顯示近期的排程紀錄。
+          若要取消排程，請至 <a href="https://charlie98783.app.n8n.cloud/workflow/HnQhat49evgi34vQ" target="_blank" style="color:#4f46e5;">n8n 執行記錄</a> 手動刪除。
+        </div>
+      </div>
+
+      <div id="schedule-area"><div class="loading">⏳ 載入中...</div></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- 發送確認彈窗 -->
+<div class="modal-bg" id="modal-send">
+  <div class="modal">
+    <h3 id="modal-title">確認發送</h3>
+    <div class="field-label">Thread 標題</div>
+    <div class="field-val" id="modal-thread"></div>
+    <div class="field-label">發送時間（台灣時間）</div>
+    <div style="margin-bottom:14px;">
+      <input type="time" id="modal-time" style="border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:0.9rem;width:100%;outline:none;">
+      <div style="font-size:0.75rem;color:#888;margin-top:5px;">現在是 <span id="modal-now"></span>（台灣時間）</div>
+    </div>
+    <div class="field-label">公告內容預覽</div>
+    <div class="field-val" id="modal-content"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" id="modal-confirm-btn" onclick="confirmSend()">✈️ 設定排程</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── 設定 ──────────────────────────────────────────────────────
+const SHEET_ID   = '1zAThMoAwT2Y4x4ZjvNkdLSwWI9-tHj0XuvVASNCoOjw';
+const SHEET_NAME = '公告重整';
+const N8N_WEBHOOK = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
+
+// ── 狀態 ──────────────────────────────────────────────────────
+let allData = [];
+let pendingAnn = null; // 待確認發送的公告
+
+// ── 頁面切換 ──────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name === 'schedule') loadSchedule();
+}
+
+// ── 讀取試算表 ────────────────────────────────────────────────
+async function loadSheet() {
+  document.getElementById('list-area').innerHTML = '<div class="loading">⏳ 正在讀取試算表...</div>';
+  document.getElementById('list-updated').textContent = '載入中...';
+
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&headers=1`;
+
+  try {
+    const res  = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.replace(/^[^{]*/, '').replace(/\);?\s*$/, ''));
+    const tbl  = json.table;
+    if (!tbl) throw new Error('回傳格式錯誤');
+
+    const headers = (tbl.cols || []).map(c => (c.label || '').trim());
+    const ix = {
+      date:      headers.indexOf('日期'),
+      time:      headers.indexOf('時間'),
+      type:      headers.indexOf('公告類型'),
+      image:     headers.indexOf('圖片'),
+      titleTW:   headers.indexOf('繁中標題'),
+      contentTW: headers.indexOf('繁中內容'),
+      titleJP:   headers.indexOf('日文標題'),
+      contentJP: headers.indexOf('日文內容'),
+      titleEN:   headers.indexOf('英文標題'),
+      contentEN: headers.indexOf('英文內容'),
+    };
+    // fallback 位置
+    if (ix.date === -1) Object.assign(ix, {date:0,time:1,type:2,image:3,titleTW:4,contentTW:5,titleJP:6,contentJP:7,titleEN:8,contentEN:9});
+
+    const get = (row, i) => {
+      if (i < 0 || !row.c || !row.c[i] || row.c[i].v === null) return '';
+      return String(row.c[i].v);
+    };
+
+    allData = (tbl.rows || [])
+      .map(row => ({
+        date: get(row, ix.date), time: get(row, ix.time),
+        type: get(row, ix.type), image: get(row, ix.image),
+        titleTW: get(row, ix.titleTW), contentTW: get(row, ix.contentTW),
+        titleJP: get(row, ix.titleJP), contentJP: get(row, ix.contentJP),
+        titleEN: get(row, ix.titleEN), contentEN: get(row, ix.contentEN),
+      }))
+      .filter(a => a.date && a.date !== '日期' && a.titleTW && a.titleTW !== '...');
+
+    document.getElementById('list-updated').textContent =
+      `上次更新：${new Date().toLocaleString('zh-TW')}`;
+    renderList();
+  } catch (e) {
+    document.getElementById('list-area').innerHTML =
+      `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;color:#991b1b;font-size:0.85rem;">
+        ⚠️ 無法讀取試算表：${e.message}<br>
+        請確認試算表已設為「任何知道連結的人都可以檢視」。
+      </div>`;
+    document.getElementById('list-updated').textContent = '讀取失敗';
+  }
+}
+
+// ── 日期工具 ──────────────────────────────────────────────────
+function parseDate(d, t) {
+  if (!d) return null;
+  const y = new Date().getFullYear();
+  const parts = String(d).split('/').map(Number).filter(Boolean);
+  if (parts.length < 2) return null;
+  const [m, day] = parts.length === 2 ? parts : [parts[1], parts[2]];
+  const hm = String(t || '').match(/(\d{1,2}):(\d{2})/);
+  return new Date(y, m-1, day, hm ? +hm[1] : 0, hm ? +hm[2] : 0);
+}
+function getStatus(dt) {
+  if (!dt || isNaN(dt)) return 'past';
+  const now   = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const cday  = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  if (+cday === +today) return 'today';
+  return dt > now ? 'upcoming' : 'past';
+}
+function badgeClass(type) {
+  if (!type) return 'badge-other';
+  if (type.includes('完成')) return 'badge-done';
+  if (type.includes('預告') || type.includes('維護')) return 'badge-notice';
+  if (type.includes('活動')) return 'badge-event';
+  return 'badge-other';
+}
+const borderColor = {today:'#10b981', upcoming:'#f59e0b', past:'#e0e0e0'};
+const statusOrder = {today:0, upcoming:1, past:2};
+const statusLabel = {today:'📅 今日', upcoming:'⏰ 未來排程', past:'✓ 已過期'};
+
+// ── 渲染列表 ──────────────────────────────────────────────────
+function renderList() {
+  const q  = (document.getElementById('q').value || '').toLowerCase();
+  const tf = document.getElementById('tf').value;
+  const sf = document.getElementById('sf').value;
+
+  let list = allData.filter(a => {
+    if (q && !(a.titleTW + a.date + a.type).toLowerCase().includes(q)) return false;
+    if (tf && !a.type.includes(tf)) return false;
+    if (sf !== 'all' && getStatus(parseDate(a.date, a.time)) !== sf) return false;
+    return true;
+  });
+
+  list.sort((a, b) => {
+    const da = parseDate(a.date, a.time), db = parseDate(b.date, b.time);
+    const sa = getStatus(da), sb = getStatus(db);
+    if (statusOrder[sa] !== statusOrder[sb]) return statusOrder[sa] - statusOrder[sb];
+    return (+da||0) - (+db||0);
+  });
+
+  // 統計
+  let todayCnt = 0, futureCnt = 0;
+  allData.forEach(a => {
+    const s = getStatus(parseDate(a.date, a.time));
+    if (s === 'today') todayCnt++;
+    else if (s === 'upcoming') futureCnt++;
+  });
+  document.getElementById('s-total').textContent  = allData.length;
+  document.getElementById('s-today').textContent  = todayCnt;
+  document.getElementById('s-future').textContent = futureCnt;
+
+  if (!list.length) {
+    document.getElementById('list-area').innerHTML = '<div class="empty">📭 沒有符合條件的公告</div>';
+    return;
+  }
+
+  const groups = {};
+  list.forEach(a => {
+    const s = getStatus(parseDate(a.date, a.time));
+    (groups[s] = groups[s] || []).push(a);
+  });
+
+  let html = '';
+  ['today','upcoming','past'].forEach(s => {
+    if (!groups[s]?.length) return;
+    html += `<div class="sec-label">${statusLabel[s]}（${groups[s].length}）</div>`;
+    groups[s].forEach((a, i) => {
+      const id = s + '_' + i;
+      const st = getStatus(parseDate(a.date, a.time));
+      const bc = borderColor[st];
+      const dateDisplay = a.date + (a.time ? ' ' + a.time : '');
+      const others = [a.titleJP ? `🇯🇵 ${a.titleJP}` : '', a.titleEN ? `🇺🇸 ${a.titleEN}` : ''].filter(Boolean).join('　');
+      const isDraft = !a.contentTW && !a.contentJP && !a.contentEN;
+
+      // 預設發送時間（試算表時間）
+      const defaultTime = a.time || '10:00';
+
+      html += `
+<div class="ann-card" style="border-left-color:${bc}">
+  <div class="ann-top">
+    <span class="dot dot-${st}"></span>
+    <span class="ann-date">${dateDisplay}</span>
+    ${a.type ? `<span class="badge ${badgeClass(a.type)}">${a.type}</span>` : ''}
+    ${isDraft ? '<span style="font-size:0.72rem;color:#bbb;margin-left:auto;">草稿</span>' : ''}
+  </div>
+  <div class="ann-title">${a.titleTW || '（無標題）'}</div>
+  ${others ? `<div class="ann-others">${others}</div>` : ''}
+  ${a.image && a.image !== '...' ? `<div style="margin-top:5px;font-size:0.75rem;"><a href="${a.image}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a></div>` : ''}
+  ${!isDraft ? `
+  <div class="ann-actions">
+    <button class="btn btn-green btn-sm" onclick="openSendModal(${JSON.stringify(a).replace(/"/g,'&quot;')}, '${defaultTime}')">
+      ✈️ 發送到 Discord
+    </button>
+  </div>` : ''}
+</div>`;
+    });
+  });
+
+  document.getElementById('list-area').innerHTML = html;
+}
+
+// ── 發送 Modal ────────────────────────────────────────────────
+function openSendModal(ann, defaultTime) {
+  pendingAnn = ann;
+  const normalized = ann.date.replace(/^0?(\d+)\/0?(\d+)$/, '$1/$2');
+  const parts = [ann.titleTW, ann.titleJP, ann.titleEN].filter(Boolean);
+  const threadName = '【' + normalized + '】' + parts.join(' - ');
+
+  let content = [];
+  if (ann.titleTW || ann.contentTW) content.push([ann.titleTW, ann.contentTW].filter(Boolean).join('\n'));
+  if (ann.titleJP || ann.contentJP) content.push([ann.titleJP, ann.contentJP].filter(Boolean).join('\n'));
+  if (ann.titleEN || ann.contentEN) content.push([ann.titleEN, ann.contentEN].filter(Boolean).join('\n'));
+  let contentStr = content.join('\n\n---\n\n');
+  if (ann.image && ann.image !== '...') contentStr += '\n\n' + ann.image;
+
+  document.getElementById('modal-title').textContent = '設定排程 - ' + ann.type;
+  document.getElementById('modal-thread').textContent = threadName;
+  document.getElementById('modal-content').textContent = contentStr.substring(0, 300) + (contentStr.length > 300 ? '...' : '');
+
+  // 設定預設時間
+  const t = defaultTime || ann.time || '10:00';
+  document.getElementById('modal-time').value = t.substring(0, 5);
+
+  // 顯示現在台灣時間
+  const now = new Date();
+  const twnow = new Date(now.getTime() + (8 * 60 - now.getTimezoneOffset()) * 60000);
+  document.getElementById('modal-now').textContent = twnow.toTimeString().substring(0,5);
+
+  document.getElementById('modal-send').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-send').classList.remove('open');
+  pendingAnn = null;
+}
+
+async function confirmSend() {
+  if (!pendingAnn) return;
+  const timeVal = document.getElementById('modal-time').value;
+  if (!timeVal) { toast('⚠️ 請輸入發送時間'); return; }
+
+  const btn = document.getElementById('modal-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = '發送中...';
+
+  try {
+    const payload = {
+      date:      pendingAnn.date,
+      sendTime:  timeVal,
+      titleTW:   pendingAnn.titleTW,
+      contentTW: pendingAnn.contentTW,
+      titleJP:   pendingAnn.titleJP,
+      contentJP: pendingAnn.contentJP,
+      titleEN:   pendingAnn.titleEN,
+      contentEN: pendingAnn.contentEN,
+      image:     pendingAnn.image,
+    };
+
+    const res = await fetch(N8N_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error('n8n 回應錯誤：' + res.status);
+    const data = await res.json();
+
+    closeModal();
+    toast(`✅ 排程已設定！將於 ${timeVal} 發送`);
+  } catch (e) {
+    toast('❌ 發送失敗：' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✈️ 設定排程';
+  }
+}
+
+// ── 排程狀態 ──────────────────────────────────────────────────
+async function loadSchedule() {
+  document.getElementById('schedule-area').innerHTML = '<div class="loading">⏳ 載入排程資料...</div>';
+
+  // 從 n8n executions API 讀取等待中的執行
+  const n8nBase = 'https://charlie98783.app.n8n.cloud';
+  const wfId = 'HnQhat49evgi34vQ';
+
+  try {
+    // 透過 n8n 公開 API 查詢 (需要 API key，這裡先顯示提示)
+    throw new Error('需要 n8n API key');
+  } catch {
+    // 改為顯示引導連結
+    document.getElementById('schedule-area').innerHTML = `
+      <div class="card" style="text-align:center;padding:32px;">
+        <div style="font-size:2rem;margin-bottom:12px;">🔗</div>
+        <div style="font-weight:600;margin-bottom:8px;">查看排程執行記錄</div>
+        <div style="font-size:0.85rem;color:#888;margin-bottom:20px;line-height:1.6;">
+          等待中的排程可在 n8n 執行記錄頁面查看。<br>
+          狀態為「Waiting」的執行即為排定中的公告。
+        </div>
+        <a href="${n8nBase}/workflow/${wfId}/executions" target="_blank" class="btn btn-primary" style="display:inline-flex;text-decoration:none;">
+          📋 前往 n8n 查看排程
+        </a>
+      </div>
+      <div id="local-schedules"></div>`;
+
+    renderLocalSchedules();
+  }
+}
+
+// 本地記錄的排程（從 localStorage）
+function renderLocalSchedules() {
+  const stored = JSON.parse(localStorage.getItem('schedules') || '[]');
+  const el = document.getElementById('local-schedules');
+  if (!el) return;
+  if (!stored.length) return;
+
+  const now = new Date();
+  let html = '<div class="sec-label">本次瀏覽期間設定的排程</div>';
+  stored.reverse().forEach(s => {
+    const dt = new Date(s.scheduledTime);
+    const isPast = dt < now;
+    html += `
+<div class="schedule-item">
+  <div class="si-info">
+    <div class="si-title">${s.thread_name}</div>
+    <div class="si-time">發送時間：${dt.toLocaleString('zh-TW')}</div>
+  </div>
+  <span class="schedule-tag ${isPast ? 'tag-done' : 'tag-waiting'}">${isPast ? '已發送' : '等待中'}</span>
+</div>`;
+  });
+  el.innerHTML = html;
+}
+
+// ── Toast 通知 ────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── 點擊背景關閉 modal ────────────────────────────────────────
+document.getElementById('modal-send').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ── 初始化 ────────────────────────────────────────────────────
+loadSheet();
+</script>
+</body>
+</html>
