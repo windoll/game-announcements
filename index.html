@@ -882,12 +882,23 @@ function renderAnnouncementTypes(types) {
 
   el.innerHTML = types.map((t, ti) => {
     const hasAll = t.langs.some(l => l.lang === 'all');
+    const hasSpecific = t.langs.some(l => l.lang !== 'all');
     const usedLangs = t.langs.map(l => l.lang);
     const canAddLang = !hasAll && usedLangs.length < 4;
 
     const langRows = t.langs.map((l, li) => {
-      // 語系下拉：只顯示目前未被使用的選項 + 自己本身
-      const availOpts = LANG_OPTS.filter(v => v === l.lang || !usedLangs.includes(v));
+      // 語系下拉可選範圍：
+      // - 自己本身一定可選
+      // - 未被其他列使用的選項
+      // - 若已有具體語系（TW/JP/EN），不能選「全部」
+      // - 若已有「全部」，不能選具體語系
+      const availOpts = LANG_OPTS.filter(v => {
+        if (v === l.lang) return true;              // 自己本身
+        if (usedLangs.includes(v)) return false;   // 已被其他列用掉
+        if (v === 'all' && hasSpecific) return false; // 已有具體語系，不能選全部
+        if (v !== 'all' && hasAll) return false;   // 已有全部，不能選具體語系
+        return true;
+      });
       const opts = availOpts.map(v =>
         `<option value="${v}" ${v === l.lang ? 'selected' : ''}>${v === 'all' ? '全部' : v}</option>`
       ).join('');
@@ -945,7 +956,16 @@ function addLang(ti) {
   const types = getTypes();
   if (!types[ti]) return;
   const usedLangs = types[ti].langs.map(l => l.lang);
-  const available = ['TW', 'JP', 'EN', 'all'].find(v => !usedLangs.includes(v));
+  const hasSpecific = usedLangs.some(v => v !== 'all');
+  const hasAll = usedLangs.includes('all');
+  // 已有具體語系不能加全部；已有全部不能加具體語系
+  const candidates = ['TW', 'JP', 'EN', 'all'].filter(v => {
+    if (usedLangs.includes(v)) return false;
+    if (v === 'all' && hasSpecific) return false;
+    if (v !== 'all' && hasAll) return false;
+    return true;
+  });
+  const available = candidates[0];
   if (!available) return;
   types[ti].langs.push({ lang: available, webhook: '' });
   saveTypes(types);
