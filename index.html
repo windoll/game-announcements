@@ -332,8 +332,8 @@ body {
     <h3 id="modal-title">確認發送</h3>
     <div class="field-label">公告標題</div>
     <div class="field-val" id="modal-thread"></div>
-    <div class="field-label">Discord 頻道</div>
-    <select id="modal-channel" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:0.9rem;margin-bottom:14px;outline:none;"></select>
+    <div class="field-label">發送語系 ＆ 頻道</div>
+    <div id="modal-lang-rows" style="margin-bottom:14px;display:flex;flex-direction:column;gap:8px;"></div>
     <div class="field-label">發送時間（台灣時間）</div>
     <div style="margin-bottom:14px;">
       <input type="time" id="modal-time" style="border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:0.9rem;width:100%;outline:none;">
@@ -357,7 +357,12 @@ const DEFAULTS = {
   projectName: '雀星公告管理',
   sheetId:     '1zAThMoAwT2Y4x4ZjvNkdLSwWI9-tHj0XuvVASNCoOjw',
   sheetGid:    '1281351206',
-  channels:    [{ name: '預設頻道', webhook: '' }],
+  channels:    [
+    { name: '維護頻道',   webhook: '' },
+    { name: '活動TW頻道', webhook: '' },
+    { name: '活動JP頻道', webhook: '' },
+    { name: '活動EN頻道', webhook: '' },
+  ],
 };
 const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
 const SECRET_TOKEN       = 'zx9k-Q7mP-4rNw-Hj2T';
@@ -588,10 +593,9 @@ function renderList() {
       const langTags =
         '<hr class="lang-divider">' +
         mkCheck('TW', a.titleTW) +
-        mkCheck('CN', a.titleCN) +
         mkCheck('JP', a.titleJP) +
         mkCheck('US', a.titleEN);
-      const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
+      const isDraft = !a.contentTW && !a.contentJP && !a.contentEN;
 
       // 預設發送時間（試算表時間）
       const defaultTime = a.time || '10:00';
@@ -605,7 +609,6 @@ function renderList() {
         contentHtml =
           '<div class="ann-content">' +
           mkContent('TW', a.contentTW) +
-          mkContent('CN', a.contentCN) +
           mkContent('JP', a.contentJP) +
           mkContent('US', a.contentEN) +
           '</div>';
@@ -652,18 +655,55 @@ function openSendModal(ann, defaultTime) {
 
   let content = [];
   if (ann.titleTW || ann.contentTW) content.push([ann.titleTW, ann.contentTW].filter(Boolean).join('\n'));
-  if (ann.titleCN || ann.contentCN) content.push([ann.titleCN, ann.contentCN].filter(Boolean).join('\n'));
   if (ann.titleJP || ann.contentJP) content.push([ann.titleJP, ann.contentJP].filter(Boolean).join('\n'));
   if (ann.titleEN || ann.contentEN) content.push([ann.titleEN, ann.contentEN].filter(Boolean).join('\n'));
   let contentStr = content.join('\n\n---\n\n');
   if (ann.image && ann.image !== '...') contentStr += '\n\n' + ann.image;
 
-  // 填入頻道清單
+  // 填入語系複選列
   const channels = getCfg().channels || [];
-  const sel = document.getElementById('modal-channel');
-  sel.innerHTML = channels.length
+  const type = ann.type || '';
+  const isMaintenance = type.includes('維護');
+  const isEvent = type.includes('活動');
+
+  // 預設頻道 index：維護全選index 0；活動 TW→1, JP→2, EN→3
+  // fallback: 找不到就用 index 0
+  const defIdx = (lang) => {
+    if (isMaintenance) return 0;
+    if (isEvent) {
+      if (lang === 'TW') return Math.min(1, channels.length - 1);
+      if (lang === 'JP') return Math.min(2, channels.length - 1);
+      if (lang === 'EN') return Math.min(3, channels.length - 1);
+    }
+    return 0;
+  };
+
+  const langs = [
+    { code: 'TW', title: ann.titleTW, content: ann.contentTW },
+    { code: 'JP', title: ann.titleJP, content: ann.contentJP },
+    { code: 'EN', title: ann.titleEN, content: ann.contentEN },
+  ];
+
+  const chOptions = channels.length
     ? channels.map((ch, i) => `<option value="${i}">${ch.name || '頻道 ' + (i+1)}</option>`).join('')
-    : '<option value="-1">（尚未設定頻道，請先至設定頁新增）</option>';
+    : '<option value="-1">（尚未設定頻道）</option>';
+
+  const rowsHtml = langs.map(({ code, title, content }) => {
+    const hasContent = title || content;
+    const checked = hasContent ? 'checked' : '';
+    const di = defIdx(code);
+    const opts = channels.map((ch, i) =>
+      `<option value="${i}" ${i === di ? 'selected' : ''}>${ch.name || '頻道 ' + (i+1)}</option>`
+    ).join('') || '<option value="-1">（尚未設定頻道）</option>';
+    return `
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="lang-chk-${code}" ${checked} style="width:16px;height:16px;cursor:pointer;">
+        <label for="lang-chk-${code}" style="width:28px;font-weight:600;font-size:0.85rem;cursor:pointer;">${code}</label>
+        <select id="lang-sel-${code}" style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-size:0.85rem;outline:none;">${opts}</select>
+      </div>`;
+  }).join('');
+
+  document.getElementById('modal-lang-rows').innerHTML = rowsHtml;
 
   document.getElementById('modal-title').textContent = '設定排程 - ' + ann.type;
   document.getElementById('modal-thread').textContent = threadName;
@@ -691,12 +731,36 @@ async function confirmSend() {
   const timeVal = document.getElementById('modal-time').value;
   if (!timeVal) { toast('⚠️ 請輸入發送時間'); return; }
 
-  // 取得選擇的頻道 webhook
+  // 收集勾選的語系與對應頻道
   const channels = getCfg().channels || [];
-  const chIdx = parseInt(document.getElementById('modal-channel').value);
-  const selectedCh = (chIdx >= 0 && chIdx < channels.length) ? channels[chIdx] : null;
-  if (!selectedCh || !selectedCh.webhook) {
-    toast('⚠️ 請先在設定頁新增 Discord 頻道 Webhook URL');
+  const langDefs = [
+    { code: 'TW', title: pendingAnn.titleTW || '', content: pendingAnn.contentTW || '' },
+    { code: 'JP', title: pendingAnn.titleJP || '', content: pendingAnn.contentJP || '' },
+    { code: 'EN', title: pendingAnn.titleEN || '', content: pendingAnn.contentEN || '' },
+  ];
+
+  const messages = [];
+  for (const lang of langDefs) {
+    const chk = document.getElementById('lang-chk-' + lang.code);
+    if (!chk || !chk.checked) continue;
+    const selEl = document.getElementById('lang-sel-' + lang.code);
+    const chIdx = parseInt(selEl ? selEl.value : '-1');
+    const ch = (chIdx >= 0 && chIdx < channels.length) ? channels[chIdx] : null;
+    if (!ch || !ch.webhook) {
+      toast(`⚠️ ${lang.code} 的頻道尚未設定 Webhook URL，請先至設定頁填入`);
+      return;
+    }
+    messages.push({
+      lang:        lang.code,
+      title:       lang.title,
+      content:     lang.content,
+      webhook:     ch.webhook,
+      channelName: ch.name || '',
+    });
+  }
+
+  if (messages.length === 0) {
+    toast('⚠️ 請至少勾選一個語系');
     return;
   }
 
@@ -706,19 +770,11 @@ async function confirmSend() {
 
   try {
     const payload = {
-      date:           pendingAnn.date,
-      sendTime:       timeVal,
-      titleTW:        pendingAnn.titleTW   || '',
-      contentTW:      pendingAnn.contentTW || '',
-      titleCN:        pendingAnn.titleCN   || '',
-      contentCN:      pendingAnn.contentCN || '',
-      titleJP:        pendingAnn.titleJP   || '',
-      contentJP:      pendingAnn.contentJP || '',
-      titleEN:        pendingAnn.titleEN   || '',
-      contentEN:      pendingAnn.contentEN || '',
-      image:          pendingAnn.image     || '',
-      discordWebhook: selectedCh.webhook,
-      channelName:    selectedCh.name     || '',
+      date:     pendingAnn.date,
+      sendTime: timeVal,
+      type:     pendingAnn.type || '',
+      image:    pendingAnn.image || '',
+      messages,
     };
 
     const res = await fetch(N8N_WEBHOOK, {
