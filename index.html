@@ -804,8 +804,8 @@ function renderModalLangs(typeIdx) {
       statusLabel = '⚠️ Webhook 未填入';
       statusStyle = 'color:#ef4444;';
     } else {
-      statusLabel = webhook.replace(/^https:\/\/discord\.com\/api\/webhooks\/(\d+)\/.+$/, '.../$1/***');
-      statusStyle = 'color:#16a34a;';
+      statusLabel = '✓';
+      statusStyle = 'color:#16a34a;font-weight:700;';
     }
 
     return `
