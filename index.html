@@ -892,11 +892,16 @@ function renderAnnouncementTypes(types) {
       // - 未被其他列使用的選項
       // - 若已有具體語系（TW/JP/EN），不能選「全部」
       // - 若已有「全部」，不能選具體語系
+      // 其他列（排除自己）的語系
+      const otherLangs = t.langs.filter((_, idx) => idx !== li).map(x => x.lang);
+      const otherHasSpecific = otherLangs.some(v => v !== 'all');
+      const otherHasAll = otherLangs.includes('all');
+
       const availOpts = LANG_OPTS.filter(v => {
-        if (v === l.lang) return true;              // 自己本身
-        if (usedLangs.includes(v)) return false;   // 已被其他列用掉
-        if (v === 'all' && hasSpecific) return false; // 已有具體語系，不能選全部
-        if (v !== 'all' && hasAll) return false;   // 已有全部，不能選具體語系
+        if (v === l.lang) return true;                      // 自己本身一定可選
+        if (otherLangs.includes(v)) return false;           // 已被其他列用掉
+        if (v === 'all' && otherHasSpecific) return false;  // 其他列有具體語系，不能選全部
+        if (v !== 'all' && otherHasAll) return false;       // 其他列有全部，不能選具體語系
         return true;
       });
       const opts = availOpts.map(v =>
