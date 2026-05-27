@@ -341,13 +341,15 @@ async function loadSheet() {
       image:     headers.indexOf('圖片'),
       titleTW:   headers.indexOf('繁中標題'),
       contentTW: headers.indexOf('繁中內容'),
+      titleCN:   headers.indexOf('簡中標題'),
+      contentCN: headers.indexOf('簡中內容'),
       titleJP:   headers.indexOf('日文標題'),
       contentJP: headers.indexOf('日文內容'),
       titleEN:   headers.indexOf('英文標題'),
       contentEN: headers.indexOf('英文內容'),
     };
-    // fallback 位置
-    if (ix.date === -1) Object.assign(ix, {date:0,time:1,type:2,image:3,titleTW:4,contentTW:5,titleJP:6,contentJP:7,titleEN:8,contentEN:9});
+    // fallback 位置（無簡中欄位時維持 -1，後續自動跳過）
+    if (ix.date === -1) Object.assign(ix, {date:0,time:1,type:2,image:3,titleTW:4,contentTW:5,titleCN:-1,contentCN:-1,titleJP:6,contentJP:7,titleEN:8,contentEN:9});
 
     // gviz 日期欄位傳回 "Date(yyyy,m,d)" (月份 0-based)
     // gviz 時間欄位傳回 "Date(1899,11,30,h,min,s)"
@@ -382,6 +384,7 @@ async function loadSheet() {
         date: getDate(row, ix.date), time: getTime(row, ix.time),
         type: get(row, ix.type), image: get(row, ix.image),
         titleTW: get(row, ix.titleTW), contentTW: get(row, ix.contentTW),
+        titleCN: get(row, ix.titleCN), contentCN: get(row, ix.contentCN),
         titleJP: get(row, ix.titleJP), contentJP: get(row, ix.contentJP),
         titleEN: get(row, ix.titleEN), contentEN: get(row, ix.contentEN),
       }))
@@ -491,6 +494,7 @@ function renderList() {
       if (!isDraft) {
         contentHtml = '<div class="ann-content">';
         if (a.contentTW) contentHtml += `<div class="content-lang">🇹🇼 繁體中文</div><div class="content-text">${a.contentTW}</div>`;
+        if (a.contentCN) contentHtml += `<div class="content-lang">🇨🇳 简体中文</div><div class="content-text">${a.contentCN}</div>`;
         if (a.contentJP) contentHtml += `<div class="content-lang">🇯🇵 日文</div><div class="content-text">${a.contentJP}</div>`;
         if (a.contentEN) contentHtml += `<div class="content-lang">🇺🇸 English</div><div class="content-text">${a.contentEN}</div>`;
         contentHtml += '</div>';
@@ -576,13 +580,15 @@ async function confirmSend() {
     const payload = {
       date:      pendingAnn.date,
       sendTime:  timeVal,
-      titleTW:   pendingAnn.titleTW,
-      contentTW: pendingAnn.contentTW,
-      titleJP:   pendingAnn.titleJP,
-      contentJP: pendingAnn.contentJP,
-      titleEN:   pendingAnn.titleEN,
-      contentEN: pendingAnn.contentEN,
-      image:     pendingAnn.image,
+      titleTW:   pendingAnn.titleTW   || '',
+      contentTW: pendingAnn.contentTW || '',
+      titleCN:   pendingAnn.titleCN   || '',
+      contentCN: pendingAnn.contentCN || '',
+      titleJP:   pendingAnn.titleJP   || '',
+      contentJP: pendingAnn.contentJP || '',
+      titleEN:   pendingAnn.titleEN   || '',
+      contentEN: pendingAnn.contentEN || '',
+      image:     pendingAnn.image     || '',
     };
 
     const res = await fetch(N8N_WEBHOOK, {
@@ -611,10 +617,14 @@ async function loadSchedule() {
   try {
     const res = await fetch(N8N_SCHEDULES);
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-
-    // data 可能是陣列，也可能是 { data: [...] } 包裝
-    const rows = Array.isArray(data) ? data : (data.data || []);
+    const text = await res.text();
+    if (!text || !text.trim()) {
+      renderScheduleRows([]);
+      return;
+    }
+    const data = JSON.parse(text);
+    // data 可能是陣列、{ data: [...] } 或單一物件
+    let rows = Array.isArray(data) ? data : (data.data || (data.id ? [data] : []));
     renderScheduleRows(rows);
   } catch (e) {
     document.getElementById('schedule-area').innerHTML =
