@@ -334,9 +334,14 @@ body {
     <div class="field-val" id="modal-thread"></div>
     <div class="field-label">發送語系 ＆ 頻道</div>
     <div id="modal-lang-rows" style="margin-bottom:14px;display:flex;flex-direction:column;gap:8px;"></div>
-    <div class="field-label">發送時間（台灣時間）</div>
+    <div class="field-label">發送日期 ＆ 時間（台灣時間）</div>
     <div style="margin-bottom:14px;">
-      <input type="time" id="modal-time" style="border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:0.9rem;width:100%;outline:none;">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <select id="modal-date" style="flex:2;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:0.9rem;outline:none;"></select>
+        <select id="modal-time-h" style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:0.9rem;outline:none;"></select>
+        <span style="font-size:1rem;font-weight:600;">:</span>
+        <select id="modal-time-m" style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:0.9rem;outline:none;"></select>
+      </div>
       <div style="font-size:0.75rem;color:#888;margin-top:5px;">現在是 <span id="modal-now"></span>（台灣時間）</div>
     </div>
     <div class="field-label">公告內容預覽</div>
@@ -712,13 +717,45 @@ function openSendModal(ann, defaultTime) {
   document.getElementById('modal-thread').textContent = threadName;
   document.getElementById('modal-content').textContent = contentStr.substring(0, 300) + (contentStr.length > 300 ? '...' : '');
 
-  // 設定預設時間
-  const t = defaultTime || ann.time || '10:00';
-  document.getElementById('modal-time').value = t.substring(0, 5);
+  // 初始化日期 select：今天起往後 14 天（台灣時間）
+  const _twToday = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+  const dateSel = document.getElementById('modal-date');
+  dateSel.innerHTML = '';
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(_twToday);
+    d.setDate(d.getDate() + i);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const val = mm + '/' + dd;
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = val;
+    // 預選公告日期（ann.date 格式可能是 M/D 或 MM/DD）
+    const annDate = (ann.date || '').replace(/^0*(\d+)\/0*(\d+)$/, (_, m, d2) =>
+      String(m).padStart(2,'0') + '/' + String(d2).padStart(2,'0'));
+    if (val === annDate || (i === 0 && !annDate)) opt.selected = true;
+    dateSel.appendChild(opt);
+  }
 
-  // 顯示現在台灣時間
-  const twNowStr = new Date().toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false });
-  document.getElementById('modal-now').textContent = twNowStr;
+  // 初始化時 select（00–23）
+  const hourSel = document.getElementById('modal-time-h');
+  hourSel.innerHTML = Array.from({length:24},(_,h)=>`<option value="${String(h).padStart(2,'0')}">${String(h).padStart(2,'0')}</option>`).join('');
+
+  // 初始化分 select（00, 05, 10 ... 55）
+  const minSel = document.getElementById('modal-time-m');
+  minSel.innerHTML = Array.from({length:12},(_,i)=>`<option value="${String(i*5).padStart(2,'0')}">${String(i*5).padStart(2,'0')}</option>`).join('');
+
+  // 預選時間
+  const t = (defaultTime || ann.time || '10:00').substring(0, 5);
+  const [th, tm] = t.split(':');
+  hourSel.value = th.padStart(2,'0');
+  // 分鐘四捨五入到最近的 5 分
+  const tmRounded = String(Math.round(parseInt(tm||'0') / 5) * 5 % 60).padStart(2,'0');
+  minSel.value = tmRounded;
+
+  // 顯示現在台灣日期時間（24小時制）
+  const _twNow = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+  document.getElementById('modal-now').textContent = _twNow.replace(',', ' ');
 
   document.getElementById('modal-send').classList.add('open');
 }
@@ -730,8 +767,11 @@ function closeModal() {
 
 async function confirmSend() {
   if (!pendingAnn) return;
-  const timeVal = document.getElementById('modal-time').value;
-  if (!timeVal) { toast('⚠️ 請輸入發送時間'); return; }
+  const dateVal = document.getElementById('modal-date').value;
+  const hourVal = document.getElementById('modal-time-h').value;
+  const minVal  = document.getElementById('modal-time-m').value;
+  if (!dateVal || !hourVal || !minVal) { toast('⚠️ 請選擇發送日期與時間'); return; }
+  const timeVal = hourVal + ':' + minVal;
 
   // 收集勾選的語系與對應頻道
   const channels = getCfg().channels || [];
@@ -772,7 +812,7 @@ async function confirmSend() {
 
   try {
     const payload = {
-      date:     pendingAnn.date,
+      date:     dateVal,
       sendTime: timeVal,
       type:     pendingAnn.type || '',
       image:    pendingAnn.image || '',
@@ -789,7 +829,7 @@ async function confirmSend() {
     const data = await res.json();
 
     closeModal();
-    toast(`✅ 排程已設定！將於 ${timeVal} 發送`);
+    toast(`✅ 排程已設定！將於 ${dateVal} ${timeVal} 發送`);
   } catch (e) {
     toast('❌ 發送失敗：' + e.message);
   } finally {
