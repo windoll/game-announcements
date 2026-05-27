@@ -304,6 +304,7 @@ body {
 const SHEET_ID   = '1zAThMoAwT2Y4x4ZjvNkdLSwWI9-tHj0XuvVASNCoOjw';
 const SHEET_NAME = '公告重整';
 const N8N_WEBHOOK = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
+const N8N_SCHEDULES = 'https://charlie98783.app.n8n.cloud/webhook/get-schedules';
 
 // ── 狀態 ──────────────────────────────────────────────────────
 let allData = [];
@@ -607,55 +608,67 @@ async function confirmSend() {
 async function loadSchedule() {
   document.getElementById('schedule-area').innerHTML = '<div class="loading">⏳ 載入排程資料...</div>';
 
-  // 從 n8n executions API 讀取等待中的執行
-  const n8nBase = 'https://charlie98783.app.n8n.cloud';
-  const wfId = 'HnQhat49evgi34vQ';
-
   try {
-    // 透過 n8n 公開 API 查詢 (需要 API key，這裡先顯示提示)
-    throw new Error('需要 n8n API key');
-  } catch {
-    // 改為顯示引導連結
-    document.getElementById('schedule-area').innerHTML = `
-      <div class="card" style="text-align:center;padding:32px;">
-        <div style="font-size:2rem;margin-bottom:12px;">🔗</div>
-        <div style="font-weight:600;margin-bottom:8px;">查看排程執行記錄</div>
-        <div style="font-size:0.85rem;color:#888;margin-bottom:20px;line-height:1.6;">
-          等待中的排程可在 n8n 執行記錄頁面查看。<br>
-          狀態為「Waiting」的執行即為排定中的公告。
-        </div>
-        <a href="${n8nBase}/workflow/${wfId}/executions" target="_blank" class="btn btn-primary" style="display:inline-flex;text-decoration:none;">
-          📋 前往 n8n 查看排程
-        </a>
-      </div>
-      <div id="local-schedules"></div>`;
+    const res = await fetch(N8N_SCHEDULES);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
 
-    renderLocalSchedules();
+    // data 可能是陣列，也可能是 { data: [...] } 包裝
+    const rows = Array.isArray(data) ? data : (data.data || []);
+    renderScheduleRows(rows);
+  } catch (e) {
+    document.getElementById('schedule-area').innerHTML =
+      `<div class="card" style="text-align:center;padding:24px;color:#ef4444;">❌ 無法載入排程資料：${e.message}</div>`;
   }
 }
 
-// 本地記錄的排程（從 localStorage）
-function renderLocalSchedules() {
-  const stored = JSON.parse(localStorage.getItem('schedules') || '[]');
-  const el = document.getElementById('local-schedules');
-  if (!el) return;
-  if (!stored.length) return;
-
+function renderScheduleRows(rows) {
   const now = new Date();
-  let html = '<div class="sec-label">本次瀏覽期間設定的排程</div>';
-  stored.reverse().forEach(s => {
-    const dt = new Date(s.scheduledTime);
-    const isPast = dt < now;
-    html += `
+
+  if (!rows.length) {
+    document.getElementById('schedule-area').innerHTML =
+      '<div class="card" style="text-align:center;padding:32px;color:#888;">目前沒有任何排程記錄</div>';
+    return;
+  }
+
+  // 按 scheduled_at 降冪排序
+  rows.sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
+
+  const waiting = rows.filter(r => r.status === 'waiting');
+  const sent    = rows.filter(r => r.status === 'sent');
+
+  let html = '';
+
+  if (waiting.length) {
+    html += '<div class="sec-label">⏰ 等待發送中</div>';
+    waiting.forEach(r => { html += scheduleItemHtml(r, now); });
+  }
+
+  if (sent.length) {
+    html += '<div class="sec-label" style="margin-top:20px;">✅ 已發送</div>';
+    sent.forEach(r => { html += scheduleItemHtml(r, now); });
+  }
+
+  document.getElementById('schedule-area').innerHTML = html;
+}
+
+function scheduleItemHtml(r, now) {
+  const dt = new Date(r.scheduled_at);
+  const isPast = dt < now;
+  const statusTag = r.status === 'sent'
+    ? '<span class="schedule-tag tag-done">已發送</span>'
+    : (isPast ? '<span class="schedule-tag tag-done">已發送（待確認）</span>' : '<span class="schedule-tag tag-waiting">等待中</span>');
+  const titleDisplay = r.title_tw || r.title_jp || r.title_en || '（無標題）';
+  const others = [r.title_jp, r.title_en].filter(Boolean).join(' / ');
+  return `
 <div class="schedule-item">
   <div class="si-info">
-    <div class="si-title">${s.thread_name}</div>
-    <div class="si-time">發送時間：${dt.toLocaleString('zh-TW')}</div>
+    <div class="si-title">【${r.date || ''}】${titleDisplay}</div>
+    ${others ? `<div style="font-size:0.78rem;color:#888;margin-top:2px;">${others}</div>` : ''}
+    <div class="si-time">發送時間：${dt.toLocaleString('zh-TW', {timeZone:'Asia/Taipei'})}</div>
   </div>
-  <span class="schedule-tag ${isPast ? 'tag-done' : 'tag-waiting'}">${isPast ? '已發送' : '等待中'}</span>
+  ${statusTag}
 </div>`;
-  });
-  el.innerHTML = html;
 }
 
 // ── Toast 通知 ────────────────────────────────────────────────
