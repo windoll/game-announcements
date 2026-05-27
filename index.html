@@ -305,6 +305,7 @@ const SHEET_ID   = '1zAThMoAwT2Y4x4ZjvNkdLSwWI9-tHj0XuvVASNCoOjw';
 const SHEET_NAME = '公告重整';
 const N8N_WEBHOOK = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
 const N8N_SCHEDULES = 'https://charlie98783.app.n8n.cloud/webhook/get-schedules';
+const SECRET_TOKEN = 'zx9k-Q7mP-4rNw-Hj2T'; // 可自行修改
 
 // ── 狀態 ──────────────────────────────────────────────────────
 let allData = [];
@@ -594,7 +595,7 @@ async function confirmSend() {
 
     const res = await fetch(N8N_WEBHOOK, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Secret': SECRET_TOKEN },
       body: JSON.stringify(payload)
     });
 
@@ -616,7 +617,9 @@ async function loadSchedule() {
   document.getElementById('schedule-area').innerHTML = '<div class="loading">⏳ 載入排程資料...</div>';
 
   try {
-    const res = await fetch(N8N_SCHEDULES);
+    const res = await fetch(N8N_SCHEDULES, {
+      headers: { 'X-Secret': SECRET_TOKEN }
+    });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
     if (!text || !text.trim()) {
