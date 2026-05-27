@@ -257,6 +257,7 @@ body {
     <h2>🀄 雀星公告管理</h2>
     <button class="nav-btn active" onclick="showPage('list')">📋 公告列表</button>
     <button class="nav-btn" onclick="showPage('schedule')">⏰ 排程狀態</button>
+    <button class="nav-btn" onclick="showPage('settings')">⚙️ 設定</button>
   </nav>
 
   <!-- 主內容 -->
@@ -293,6 +294,42 @@ body {
       <div id="list-area"><div class="loading">⏳ 正在讀取試算表...</div></div>
     </div>
 
+    <!-- ③ 設定頁 -->
+    <div id="page-settings" class="page">
+      <div class="page-title">⚙️ 設定</div>
+      <div class="page-sub">調整後點「儲存設定」即可生效（儲存在此瀏覽器）</div>
+
+      <div class="card">
+        <div style="font-weight:600;font-size:0.95rem;margin-bottom:16px;">📋 基本資訊</div>
+        <div class="field-label">專案名稱（顯示在側邊欄）</div>
+        <input type="text" id="cfg-project-name" placeholder="雀星公告管理"
+          style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.9rem;margin-bottom:14px;outline:none;">
+
+        <div class="field-label">Google Sheet ID</div>
+        <input type="text" id="cfg-sheet-id" placeholder="試算表 ID（網址中的那段）"
+          style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.85rem;font-family:monospace;margin-bottom:14px;outline:none;">
+
+        <div class="field-label">Google Sheet GID（工作表 ID）</div>
+        <input type="text" id="cfg-sheet-gid" placeholder="e.g. 1281351206"
+          style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.85rem;font-family:monospace;margin-bottom:0;outline:none;">
+        <div style="font-size:0.75rem;color:#888;margin-top:4px;">在試算表網址 ?gid= 後面的數字</div>
+      </div>
+
+      <div class="card" style="margin-top:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div style="font-weight:600;font-size:0.95rem;">📢 Discord 頻道</div>
+          <button class="btn btn-outline btn-sm" onclick="addChannel()">＋ 新增頻道</button>
+        </div>
+        <div id="cfg-channels"></div>
+        <div style="font-size:0.75rem;color:#888;margin-top:8px;">Webhook URL 格式：https://discord.com/api/webhooks/...</div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:4px;">
+        <button class="btn btn-primary" onclick="saveSettings()">💾 儲存設定</button>
+        <button class="btn btn-outline" onclick="loadSettings()">↻ 還原</button>
+      </div>
+    </div>
+
     <!-- ② 排程狀態 -->
     <div id="page-schedule" class="page">
       <div class="page-title">排程狀態</div>
@@ -317,6 +354,8 @@ body {
     <h3 id="modal-title">確認發送</h3>
     <div class="field-label">Thread 標題</div>
     <div class="field-val" id="modal-thread"></div>
+    <div class="field-label">Discord 頻道</div>
+    <select id="modal-channel" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:0.9rem;margin-bottom:14px;outline:none;"></select>
     <div class="field-label">發送時間（台灣時間）</div>
     <div style="margin-bottom:14px;">
       <input type="time" id="modal-time" style="border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:0.9rem;width:100%;outline:none;">
@@ -335,13 +374,29 @@ body {
 <div id="toast"></div>
 
 <script>
-// ── 設定 ──────────────────────────────────────────────────────
-const SHEET_ID   = '1zAThMoAwT2Y4x4ZjvNkdLSwWI9-tHj0XuvVASNCoOjw';
-const SHEET_NAME = '公告重整';
-const N8N_WEBHOOK = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
-const N8N_SCHEDULES = 'https://charlie98783.app.n8n.cloud/webhook/get-schedules';
-const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199'; // SHA-256 hash，非明文
-const SECRET_TOKEN = 'zx9k-Q7mP-4rNw-Hj2T';  // n8n webhook token（勿修改）
+// ── 預設設定（可在設定頁覆蓋，存於 localStorage）─────────────
+const DEFAULTS = {
+  projectName: '雀星公告管理',
+  sheetId:     '1zAThMoAwT2Y4x4ZjvNkdLSwWI9-tHj0XuvVASNCoOjw',
+  sheetGid:    '1281351206',
+  channels:    [{ name: '預設頻道', webhook: '' }],
+};
+const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
+const SECRET_TOKEN       = 'zx9k-Q7mP-4rNw-Hj2T';
+const N8N_WEBHOOK        = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
+const N8N_SCHEDULES      = 'https://charlie98783.app.n8n.cloud/webhook/get-schedules';
+
+// ── 從 localStorage 讀取設定 ──────────────────────────────────
+function getCfg() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('ann-cfg') || '{}');
+    return Object.assign({}, DEFAULTS, saved);
+  } catch { return { ...DEFAULTS }; }
+}
+
+// 動態常數（讀自設定）
+function SHEET_ID()  { return getCfg().sheetId; }
+function SHEET_GID() { return getCfg().sheetGid; }
 
 // ── 密碼鎖 ────────────────────────────────────────────────────
 async function checkPassword() {
@@ -357,7 +412,7 @@ async function checkPassword() {
     sessionStorage.setItem('unlocked', '1');
     document.getElementById('lock-screen').style.display = 'none';
     document.getElementById('main-app').style.display = '';
-    loadSheet();
+    initApp();
   } else {
     document.getElementById('lock-error').textContent = '密碼錯誤，請再試一次';
     document.getElementById('lock-input').value = '';
@@ -384,6 +439,7 @@ function showPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   event.currentTarget.classList.add('active');
   if (name === 'schedule') loadSchedule();
+  if (name === 'settings') loadSettings();
 }
 
 // ── 讀取試算表 ────────────────────────────────────────────────
@@ -391,7 +447,7 @@ async function loadSheet() {
   document.getElementById('list-area').innerHTML = '<div class="loading">⏳ 正在讀取試算表...</div>';
   document.getElementById('list-updated').textContent = '載入中...';
 
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&headers=1`;
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID()}/gviz/tq?tqx=out:json&gid=${SHEET_GID()}&headers=1`;
 
   try {
     const res  = await fetch(url);
@@ -614,6 +670,13 @@ function openSendModal(ann, defaultTime) {
   let contentStr = content.join('\n\n---\n\n');
   if (ann.image && ann.image !== '...') contentStr += '\n\n' + ann.image;
 
+  // 填入頻道清單
+  const channels = getCfg().channels || [];
+  const sel = document.getElementById('modal-channel');
+  sel.innerHTML = channels.length
+    ? channels.map((ch, i) => `<option value="${i}">${ch.name || '頻道 ' + (i+1)}</option>`).join('')
+    : '<option value="-1">（尚未設定頻道，請先至設定頁新增）</option>';
+
   document.getElementById('modal-title').textContent = '設定排程 - ' + ann.type;
   document.getElementById('modal-thread').textContent = threadName;
   document.getElementById('modal-content').textContent = contentStr.substring(0, 300) + (contentStr.length > 300 ? '...' : '');
@@ -640,23 +703,34 @@ async function confirmSend() {
   const timeVal = document.getElementById('modal-time').value;
   if (!timeVal) { toast('⚠️ 請輸入發送時間'); return; }
 
+  // 取得選擇的頻道 webhook
+  const channels = getCfg().channels || [];
+  const chIdx = parseInt(document.getElementById('modal-channel').value);
+  const selectedCh = (chIdx >= 0 && chIdx < channels.length) ? channels[chIdx] : null;
+  if (!selectedCh || !selectedCh.webhook) {
+    toast('⚠️ 請先在設定頁新增 Discord 頻道 Webhook URL');
+    return;
+  }
+
   const btn = document.getElementById('modal-confirm-btn');
   btn.disabled = true;
   btn.textContent = '發送中...';
 
   try {
     const payload = {
-      date:      pendingAnn.date,
-      sendTime:  timeVal,
-      titleTW:   pendingAnn.titleTW   || '',
-      contentTW: pendingAnn.contentTW || '',
-      titleCN:   pendingAnn.titleCN   || '',
-      contentCN: pendingAnn.contentCN || '',
-      titleJP:   pendingAnn.titleJP   || '',
-      contentJP: pendingAnn.contentJP || '',
-      titleEN:   pendingAnn.titleEN   || '',
-      contentEN: pendingAnn.contentEN || '',
-      image:     pendingAnn.image     || '',
+      date:           pendingAnn.date,
+      sendTime:       timeVal,
+      titleTW:        pendingAnn.titleTW   || '',
+      contentTW:      pendingAnn.contentTW || '',
+      titleCN:        pendingAnn.titleCN   || '',
+      contentCN:      pendingAnn.contentCN || '',
+      titleJP:        pendingAnn.titleJP   || '',
+      contentJP:      pendingAnn.contentJP || '',
+      titleEN:        pendingAnn.titleEN   || '',
+      contentEN:      pendingAnn.contentEN || '',
+      image:          pendingAnn.image     || '',
+      discordWebhook: selectedCh.webhook,
+      channelName:    selectedCh.name     || '',
     };
 
     const res = await fetch(N8N_WEBHOOK, {
@@ -759,13 +833,121 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 3000);
 }
 
+// ── 設定頁邏輯 ────────────────────────────────────────────────
+
+// 從 localStorage 把值填入設定頁表單
+function loadSettings() {
+  const cfg = getCfg();
+  document.getElementById('cfg-project-name').value = cfg.projectName || '';
+  document.getElementById('cfg-sheet-id').value     = cfg.sheetId    || '';
+  document.getElementById('cfg-sheet-gid').value    = cfg.sheetGid   || '';
+  renderChannels(cfg.channels || []);
+}
+
+// 渲染頻道列表
+function renderChannels(channels) {
+  const el = document.getElementById('cfg-channels');
+  if (!channels.length) {
+    el.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:8px 0;">尚無頻道，點右上角「新增頻道」</div>';
+    return;
+  }
+  el.innerHTML = channels.map((ch, i) => `
+<div class="ch-row" id="ch-${i}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;">
+  <div style="flex:0 0 120px;">
+    <div class="field-label">頻道名稱</div>
+    <input type="text" value="${escHtml(ch.name)}" placeholder="例：公告頻道"
+      oninput="updateChannel(${i},'name',this.value)"
+      style="width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.85rem;outline:none;">
+  </div>
+  <div style="flex:1;">
+    <div class="field-label">Webhook URL</div>
+    <input type="text" value="${escHtml(ch.webhook)}" placeholder="https://discord.com/api/webhooks/..."
+      oninput="updateChannel(${i},'webhook',this.value)"
+      style="width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.82rem;font-family:monospace;outline:none;">
+  </div>
+  <button onclick="removeChannel(${i})" title="刪除此頻道"
+    style="flex-shrink:0;background:none;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:0.8rem;">✕</button>
+</div>`).join('');
+}
+
+// 暫存頻道編輯（存回 localStorage 即時更新）
+let _cfgChannels = [];
+function syncChannelsFromForm() {
+  const cfg = getCfg();
+  _cfgChannels = cfg.channels ? [...cfg.channels] : [];
+}
+function updateChannel(i, field, val) {
+  const cfg = getCfg();
+  const chs = cfg.channels ? [...cfg.channels] : [];
+  if (!chs[i]) return;
+  chs[i] = { ...chs[i], [field]: val };
+  const updated = Object.assign({}, cfg, { channels: chs });
+  localStorage.setItem('ann-cfg', JSON.stringify(updated));
+}
+
+function addChannel() {
+  const cfg = getCfg();
+  const chs = [...(cfg.channels || []), { name: '新頻道', webhook: '' }];
+  const updated = Object.assign({}, cfg, { channels: chs });
+  localStorage.setItem('ann-cfg', JSON.stringify(updated));
+  renderChannels(chs);
+}
+
+function removeChannel(i) {
+  const cfg = getCfg();
+  const chs = (cfg.channels || []).filter((_, idx) => idx !== i);
+  const updated = Object.assign({}, cfg, { channels: chs });
+  localStorage.setItem('ann-cfg', JSON.stringify(updated));
+  renderChannels(chs);
+}
+
+function saveSettings() {
+  const name   = document.getElementById('cfg-project-name').value.trim();
+  const sid    = document.getElementById('cfg-sheet-id').value.trim();
+  const sgid   = document.getElementById('cfg-sheet-gid').value.trim();
+
+  if (!sid)  { toast('⚠️ 請填入 Google Sheet ID'); return; }
+  if (!sgid) { toast('⚠️ 請填入 Google Sheet GID'); return; }
+
+  const cfg = getCfg();
+  const updated = Object.assign({}, cfg, {
+    projectName: name || DEFAULTS.projectName,
+    sheetId:     sid,
+    sheetGid:    sgid,
+    // channels 已即時寫入，不需要再讀表單
+  });
+  localStorage.setItem('ann-cfg', JSON.stringify(updated));
+
+  // 更新側邊欄標題
+  applyProjectName(updated.projectName);
+
+  toast('✅ 設定已儲存！重新整理公告列表...');
+  setTimeout(loadSheet, 800);
+}
+
+function applyProjectName(name) {
+  const el = document.querySelector('.sidebar h2');
+  if (el) el.textContent = '🀄 ' + (name || DEFAULTS.projectName);
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 // ── 點擊背景關閉 modal ────────────────────────────────────────
 document.getElementById('modal-send').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
 
 // ── 初始化（解鎖後由 checkPassword 或 sessionStorage 判斷呼叫）────
-if (sessionStorage.getItem('unlocked') === '1') loadSheet();
+function initApp() {
+  const cfg = getCfg();
+  applyProjectName(cfg.projectName);
+  loadSettings();
+  loadSheet();
+}
+
+if (sessionStorage.getItem('unlocked') === '1') initApp();
 </script>
 </body>
 </html>
