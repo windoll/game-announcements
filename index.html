@@ -108,6 +108,29 @@ body {
 .ann-others { font-size: 0.78rem; color: var(--text-sub); margin-top: 4px; }
 .ann-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* ── 展開內容 ── */
+.ann-card { cursor: pointer; }
+.expand-arrow {
+  margin-left: auto; font-size: 0.75rem; color: #bbb;
+  transition: transform 0.2s; display: inline-block;
+}
+.ann-card.open .expand-arrow { transform: rotate(180deg); }
+.ann-content {
+  display: none; margin-top: 12px;
+  border-top: 1px solid #f0f0f0; padding-top: 12px;
+}
+.ann-card.open .ann-content { display: block; }
+.content-lang {
+  font-size: 0.72rem; font-weight: 700; color: #aaa;
+  letter-spacing: 0.05em; margin: 10px 0 4px;
+}
+.content-lang:first-child { margin-top: 0; }
+.content-text {
+  font-size: 0.85rem; line-height: 1.7; color: #333;
+  white-space: pre-wrap; background: #f9fafb;
+  border-radius: 8px; padding: 10px 12px;
+}
+
 /* ── 按鈕 ── */
 .btn {
   border: none; border-radius: 8px; padding: 8px 16px;
@@ -422,7 +445,7 @@ function renderList() {
     const da = parseDate(a.date, a.time), db = parseDate(b.date, b.time);
     const sa = getStatus(da), sb = getStatus(db);
     if (statusOrder[sa] !== statusOrder[sb]) return statusOrder[sa] - statusOrder[sb];
-    return (+da||0) - (+db||0);
+    return (+db||0) - (+da||0);
   });
 
   // 統計
@@ -462,19 +485,31 @@ function renderList() {
       // 預設發送時間（試算表時間）
       const defaultTime = a.time || '10:00';
 
+      // 展開內容區
+      let contentHtml = '';
+      if (!isDraft) {
+        contentHtml = '<div class="ann-content">';
+        if (a.contentTW) contentHtml += `<div class="content-lang">🇹🇼 繁體中文</div><div class="content-text">${a.contentTW}</div>`;
+        if (a.contentJP) contentHtml += `<div class="content-lang">🇯🇵 日文</div><div class="content-text">${a.contentJP}</div>`;
+        if (a.contentEN) contentHtml += `<div class="content-lang">🇺🇸 English</div><div class="content-text">${a.contentEN}</div>`;
+        contentHtml += '</div>';
+      }
+
       html += `
-<div class="ann-card" style="border-left-color:${bc}">
+<div class="ann-card" id="card-${id}" style="border-left-color:${bc}" onclick="toggleCard('${id}')">
   <div class="ann-top">
     <span class="dot dot-${st}"></span>
     <span class="ann-date">${dateDisplay}</span>
     ${a.type ? `<span class="badge ${badgeClass(a.type)}">${a.type}</span>` : ''}
     ${isDraft ? '<span style="font-size:0.72rem;color:#bbb;margin-left:auto;">草稿</span>' : ''}
+    ${!isDraft ? '<span class="expand-arrow">▼</span>' : ''}
   </div>
   <div class="ann-title">${a.titleTW || '（無標題）'}</div>
   ${others ? `<div class="ann-others">${others}</div>` : ''}
-  ${a.image && a.image !== '...' ? `<div style="margin-top:5px;font-size:0.75rem;"><a href="${a.image}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a></div>` : ''}
+  ${a.image && a.image !== '...' ? `<div style="margin-top:5px;font-size:0.75rem;" onclick="event.stopPropagation()"><a href="${a.image}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a></div>` : ''}
+  ${contentHtml}
   ${!isDraft ? `
-  <div class="ann-actions">
+  <div class="ann-actions" onclick="event.stopPropagation()">
     <button class="btn btn-green btn-sm" onclick="openSendModal(${JSON.stringify(a).replace(/"/g,'&quot;')}, '${defaultTime}')">
       ✈️ 發送到 Discord
     </button>
@@ -484,6 +519,12 @@ function renderList() {
   });
 
   document.getElementById('list-area').innerHTML = html;
+}
+
+// ── 展開/收合卡片 ─────────────────────────────────────────────
+function toggleCard(id) {
+  const card = document.getElementById('card-' + id);
+  if (card) card.classList.toggle('open');
 }
 
 // ── 發送 Modal ────────────────────────────────────────────────
