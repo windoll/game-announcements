@@ -714,9 +714,8 @@ function openSendModal(ann, defaultTime) {
   document.getElementById('modal-time').value = t.substring(0, 5);
 
   // 顯示現在台灣時間
-  const now = new Date();
-  const twnow = new Date(now.getTime() + (8 * 60 - now.getTimezoneOffset()) * 60000);
-  document.getElementById('modal-now').textContent = twnow.toTimeString().substring(0,5);
+  const twNowStr = new Date().toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false });
+  document.getElementById('modal-now').textContent = twNowStr;
 
   document.getElementById('modal-send').classList.add('open');
 }
