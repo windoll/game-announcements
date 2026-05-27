@@ -358,10 +358,10 @@ const DEFAULTS = {
   sheetId:     '1zAThMoAwT2Y4x4ZjvNkdLSwWI9-tHj0XuvVASNCoOjw',
   sheetGid:    '1281351206',
   channels:    [
-    { name: '維護頻道',   webhook: '' },
-    { name: '活動TW頻道', webhook: '' },
-    { name: '活動JP頻道', webhook: '' },
-    { name: '活動EN頻道', webhook: '' },
+    { name: '維護頻道',   webhook: '', defaultLang: 'all' },
+    { name: '活動TW頻道', webhook: '', defaultLang: 'TW'  },
+    { name: '活動JP頻道', webhook: '', defaultLang: 'JP'  },
+    { name: '活動EN頻道', webhook: '', defaultLang: 'EN'  },
   ],
 };
 const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
@@ -666,14 +666,17 @@ function openSendModal(ann, defaultTime) {
   const isMaintenance = type.includes('維護');
   const isEvent = type.includes('活動');
 
-  // 預設頻道 index：維護全選index 0；活動 TW→1, JP→2, EN→3
+  // 根據頻道的 defaultLang 欄位找對應 index
+  // 維護類：找 defaultLang === 'all' 的頻道；活動類：找 defaultLang === lang 的頻道
   // fallback: 找不到就用 index 0
   const defIdx = (lang) => {
-    if (isMaintenance) return 0;
+    if (isMaintenance) {
+      const idx = channels.findIndex(ch => ch.defaultLang === 'all');
+      return idx >= 0 ? idx : 0;
+    }
     if (isEvent) {
-      if (lang === 'TW') return Math.min(1, channels.length - 1);
-      if (lang === 'JP') return Math.min(2, channels.length - 1);
-      if (lang === 'EN') return Math.min(3, channels.length - 1);
+      const idx = channels.findIndex(ch => ch.defaultLang === lang);
+      return idx >= 0 ? idx : 0;
     }
     return 0;
   };
@@ -822,13 +825,26 @@ function renderChannels(channels) {
     el.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:8px 0;">尚無頻道，點右上角「新增頻道」</div>';
     return;
   }
-  el.innerHTML = channels.map((ch, i) => `
+  const langOpts = ['all','TW','JP','EN'].map(v =>
+    `<option value="${v}">${v === 'all' ? '全部（維護用）' : v}</option>`
+  ).join('');
+  el.innerHTML = channels.map((ch, i) => {
+    const dl = ch.defaultLang || 'TW';
+    const opts = ['all','TW','JP','EN'].map(v =>
+      `<option value="${v}" ${v === dl ? 'selected' : ''}>${v === 'all' ? '全部（維護用）' : v}</option>`
+    ).join('');
+    return `
 <div class="ch-row" id="ch-${i}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;">
-  <div style="flex:0 0 120px;">
+  <div style="flex:0 0 110px;">
     <div class="field-label">頻道名稱</div>
     <input type="text" value="${escHtml(ch.name)}" placeholder="例：公告頻道"
       oninput="updateChannel(${i},'name',this.value)"
       style="width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.85rem;outline:none;">
+  </div>
+  <div style="flex:0 0 120px;">
+    <div class="field-label">預設語系</div>
+    <select onchange="updateChannel(${i},'defaultLang',this.value)"
+      style="width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.85rem;outline:none;">${opts}</select>
   </div>
   <div style="flex:1;">
     <div class="field-label">Webhook URL</div>
@@ -838,7 +854,8 @@ function renderChannels(channels) {
   </div>
   <button onclick="removeChannel(${i})" title="刪除此頻道"
     style="flex-shrink:0;background:none;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:0.8rem;">✕</button>
-</div>`).join('');
+</div>`;
+  }).join('');
 }
 
 // 暫存頻道編輯（存回 localStorage 即時更新）
@@ -858,7 +875,7 @@ function updateChannel(i, field, val) {
 
 function addChannel() {
   const cfg = getCfg();
-  const chs = [...(cfg.channels || []), { name: '新頻道', webhook: '' }];
+  const chs = [...(cfg.channels || []), { name: '新頻道', webhook: '', defaultLang: 'TW' }];
   const updated = Object.assign({}, cfg, { channels: chs });
   localStorage.setItem('ann-cfg', JSON.stringify(updated));
   renderChannels(chs);
