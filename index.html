@@ -213,10 +213,44 @@ body {
   border: 1px solid var(--border); margin-bottom: 14px;
   max-height: 140px; overflow-y: auto;
 }
+/* ── 密碼鎖 ── */
+#lock-screen {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; background: #1e1b4b;
+}
+.lock-box {
+  background: white; border-radius: 20px; padding: 40px 36px;
+  width: 360px; max-width: 95vw; text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.lock-box .lock-icon { font-size: 2.5rem; margin-bottom: 12px; }
+.lock-box h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 6px; color: #1e1b4b; }
+.lock-box p { font-size: 0.85rem; color: #6b7280; margin-bottom: 24px; }
+.lock-box input {
+  width: 100%; border: 1.5px solid #e5e7eb; border-radius: 10px;
+  padding: 10px 14px; font-size: 0.95rem; outline: none;
+  margin-bottom: 12px; text-align: center; letter-spacing: 2px;
+}
+.lock-box input:focus { border-color: #4f46e5; }
+.lock-box .lock-error { font-size: 0.82rem; color: #ef4444; margin-bottom: 10px; min-height: 18px; }
 </style>
 </head>
 <body>
 
+<!-- 密碼鎖 -->
+<div id="lock-screen">
+  <div class="lock-box">
+    <div class="lock-icon">🔒</div>
+    <h2>公告管理系統</h2>
+    <p>請輸入密碼以繼續</p>
+    <input type="password" id="lock-input" placeholder="輸入密碼"
+      onkeydown="if(event.key==='Enter')checkPassword()">
+    <div class="lock-error" id="lock-error"></div>
+    <button class="btn btn-primary" style="width:100%;" onclick="checkPassword()">進入</button>
+  </div>
+</div>
+
+<div id="main-app" style="display:none;">
 <div class="layout">
   <!-- 側邊欄 -->
   <nav class="sidebar">
@@ -296,6 +330,7 @@ body {
     </div>
   </div>
 </div>
+</div><!-- /main-app -->
 
 <div id="toast"></div>
 
@@ -305,7 +340,38 @@ const SHEET_ID   = '1zAThMoAwT2Y4x4ZjvNkdLSwWI9-tHj0XuvVASNCoOjw';
 const SHEET_NAME = '公告重整';
 const N8N_WEBHOOK = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
 const N8N_SCHEDULES = 'https://charlie98783.app.n8n.cloud/webhook/get-schedules';
-const SECRET_TOKEN = 'zx9k-Q7mP-4rNw-Hj2T'; // 可自行修改
+const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199'; // SHA-256 hash，非明文
+const SECRET_TOKEN = 'zx9k-Q7mP-4rNw-Hj2T';  // n8n webhook token（勿修改）
+
+// ── 密碼鎖 ────────────────────────────────────────────────────
+async function checkPassword() {
+  const input = document.getElementById('lock-input').value;
+  if (!input) return;
+
+  // SHA-256 hash 比對
+  const msgBuffer = new TextEncoder().encode(input);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
+
+  if (hashHex === PAGE_PASSWORD_HASH) {
+    sessionStorage.setItem('unlocked', '1');
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = '';
+    loadSheet();
+  } else {
+    document.getElementById('lock-error').textContent = '密碼錯誤，請再試一次';
+    document.getElementById('lock-input').value = '';
+    document.getElementById('lock-input').focus();
+  }
+}
+
+// 頁面載入時檢查是否已解鎖（同一 session 內不用重新輸入）
+(function() {
+  if (sessionStorage.getItem('unlocked') === '1') {
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = '';
+  }
+})();
 
 // ── 狀態 ──────────────────────────────────────────────────────
 let allData = [];
@@ -698,8 +764,8 @@ document.getElementById('modal-send').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
 
-// ── 初始化 ────────────────────────────────────────────────────
-loadSheet();
+// ── 初始化（解鎖後由 checkPassword 或 sessionStorage 判斷呼叫）────
+if (sessionStorage.getItem('unlocked') === '1') loadSheet();
 </script>
 </body>
 </html>
