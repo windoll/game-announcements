@@ -332,8 +332,10 @@ body {
     <h3 id="modal-title">確認發送</h3>
     <div class="field-label">公告標題</div>
     <div class="field-val" id="modal-thread"></div>
-    <div class="field-label">發送語系 ＆ 頻道</div>
-    <div id="modal-lang-rows" style="margin-bottom:14px;display:flex;flex-direction:column;gap:8px;"></div>
+    <div class="field-label">發送類型</div>
+    <div id="modal-type-radios" style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px;"></div>
+    <div class="field-label">語系 ＆ 頻道</div>
+    <div id="modal-lang-rows" style="margin-bottom:14px;display:flex;flex-direction:column;gap:4px;"></div>
     <div class="field-label">發送日期 ＆ 時間（台灣時間）</div>
     <div style="margin-bottom:14px;">
       <div style="display:flex;gap:6px;align-items:center;">
@@ -673,66 +675,32 @@ function openSendModal(ann, defaultTime) {
   let contentStr = content.join('\n\n---\n\n');
   if (ann.image && ann.image !== '...') contentStr += '\n\n' + ann.image;
 
-  // 自動比對公告類型（模糊比對：annType 包含設定的類型名稱）
-  const annType = ann.type || '';
+  // 所有設定的公告類型
   const announcementTypes = getCfg().announcementTypes || [];
-  const matchedType = announcementTypes.find(t => annType.includes(t.name) || t.name.includes(annType));
+  const annType = ann.type || '';
 
-  // 建立語系→webhook 對照表
-  // 若類型有 'all'，代表所有語系都發到同一個 webhook
-  window._modalMessages = [];
+  // 模糊比對預設選中的類型 index
+  let defaultTypeIdx = announcementTypes.findIndex(t => annType.includes(t.name) || t.name.includes(annType));
+  if (defaultTypeIdx < 0) defaultTypeIdx = 0;
 
-  const langDefs = [
-    { code: 'TW', title: ann.titleTW || '', content: ann.contentTW || '' },
-    { code: 'JP', title: ann.titleJP || '', content: ann.contentJP || '' },
-    { code: 'EN', title: ann.titleEN || '', content: ann.contentEN || '' },
-  ];
+  // 儲存公告內容供 renderModalLangs 和 confirmSend 使用
+  window._modalAnn = ann;
 
-  let rowsHtml = '';
-  if (!matchedType) {
-    rowsHtml = `<div style="color:#ef4444;font-size:0.85rem;padding:8px;background:#fef2f2;border-radius:8px;">⚠️ 找不到符合「${annType}」的頻道類型，請先至設定頁新增對應類型</div>`;
+  // 渲染類型 radio
+  if (!announcementTypes.length) {
+    document.getElementById('modal-type-radios').innerHTML =
+      '<div style="color:#ef4444;font-size:0.85rem;">⚠️ 尚未設定任何頻道類型，請先至設定頁新增</div>';
+    document.getElementById('modal-lang-rows').innerHTML = '';
   } else {
-    const hasAll = matchedType.langs.some(l => l.lang === 'all');
-    rowsHtml = langDefs.map(({ code, title, content }) => {
-      const hasContent = !!(title || content);
-      let langEntry;
-      if (hasAll) {
-        langEntry = matchedType.langs.find(l => l.lang === 'all');
-      } else {
-        langEntry = matchedType.langs.find(l => l.lang === code);
-      }
-      const webhook = langEntry ? langEntry.webhook : '';
-      const hasWebhook = !!(webhook);
-
-      // 只有有內容的語系才加入發送清單
-      if (hasContent && hasWebhook) {
-        window._modalMessages.push({ code, title, content, webhook, typeName: matchedType.name });
-      }
-
-      let statusLabel, statusStyle;
-      if (!hasContent) {
-        statusLabel = '（無內容，略過）';
-        statusStyle = 'color:#aaa;';
-      } else if (!langEntry) {
-        statusLabel = '⚠️ 此類型未設定此語系';
-        statusStyle = 'color:#ef4444;';
-      } else if (!hasWebhook) {
-        statusLabel = '⚠️ Webhook 未填入';
-        statusStyle = 'color:#ef4444;';
-      } else {
-        statusLabel = `→ ${matchedType.name}`;
-        statusStyle = 'color:#16a34a;';
-      }
-
-      return `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
-        <span style="width:28px;font-weight:700;font-size:0.85rem;">${code}</span>
-        <span style="flex:1;font-size:0.85rem;${statusStyle}">${statusLabel}</span>
-      </div>`;
-    }).join('');
+    document.getElementById('modal-type-radios').innerHTML = announcementTypes.map((t, i) => `
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;${i === defaultTypeIdx ? 'border-color:#6366f1;background:#f5f3ff;' : ''}">
+        <input type="radio" name="modal-type" value="${i}" ${i === defaultTypeIdx ? 'checked' : ''}
+          onchange="renderModalLangs(${i})"
+          style="accent-color:#6366f1;">
+        <span style="font-size:0.9rem;font-weight:600;">${escHtml(t.name)}</span>
+      </label>`).join('');
+    renderModalLangs(defaultTypeIdx);
   }
-
-  document.getElementById('modal-lang-rows').innerHTML = rowsHtml;
 
   document.getElementById('modal-title').textContent = '設定排程 - ' + ann.type;
   document.getElementById('modal-thread').textContent = threadName;
@@ -779,6 +747,75 @@ function openSendModal(ann, defaultTime) {
   document.getElementById('modal-now').textContent = _twNow.replace(',', ' ');
 
   document.getElementById('modal-send').classList.add('open');
+}
+
+// 根據選中的類型 index 渲染語系預覽，並更新 _modalMessages
+function renderModalLangs(typeIdx) {
+  const announcementTypes = getCfg().announcementTypes || [];
+  const t = announcementTypes[typeIdx];
+  const ann = window._modalAnn || {};
+  const langDefs = [
+    { code: 'TW', title: ann.titleTW || '', content: ann.contentTW || '' },
+    { code: 'JP', title: ann.titleJP || '', content: ann.contentJP || '' },
+    { code: 'EN', title: ann.titleEN || '', content: ann.contentEN || '' },
+  ];
+
+  // 更新 radio 樣式
+  document.querySelectorAll('[name="modal-type"]').forEach((radio, i) => {
+    const label = radio.closest('label');
+    if (!label) return;
+    if (i === typeIdx) {
+      label.style.borderColor = '#6366f1';
+      label.style.background = '#f5f3ff';
+    } else {
+      label.style.borderColor = '#e5e7eb';
+      label.style.background = '';
+    }
+  });
+
+  window._modalMessages = [];
+
+  if (!t) {
+    document.getElementById('modal-lang-rows').innerHTML = '';
+    return;
+  }
+
+  const hasAll = t.langs.some(l => l.lang === 'all');
+  const rowsHtml = langDefs.map(({ code, title, content }) => {
+    const hasContent = !!(title || content);
+    const langEntry = hasAll
+      ? t.langs.find(l => l.lang === 'all')
+      : t.langs.find(l => l.lang === code);
+    const webhook = langEntry ? langEntry.webhook : '';
+    const hasWebhook = !!webhook;
+
+    if (hasContent && hasWebhook) {
+      window._modalMessages.push({ code, title, content, webhook, typeName: t.name });
+    }
+
+    let statusLabel, statusStyle;
+    if (!hasContent) {
+      statusLabel = '無內容，略過';
+      statusStyle = 'color:#aaa;';
+    } else if (!langEntry) {
+      statusLabel = '⚠️ 此類型未設定此語系';
+      statusStyle = 'color:#ef4444;';
+    } else if (!hasWebhook) {
+      statusLabel = '⚠️ Webhook 未填入';
+      statusStyle = 'color:#ef4444;';
+    } else {
+      statusLabel = webhook.replace(/^https:\/\/discord\.com\/api\/webhooks\/(\d+)\/.+$/, '.../$1/***');
+      statusStyle = 'color:#16a34a;';
+    }
+
+    return `
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+      <span style="width:28px;font-weight:700;font-size:0.85rem;color:#374151;">${code}</span>
+      <span style="flex:1;font-size:0.82rem;${statusStyle}">${statusLabel}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('modal-lang-rows').innerHTML = rowsHtml;
 }
 
 function closeModal() {
