@@ -831,6 +831,15 @@ async function confirmSend() {
   if (!dateVal || !hourVal || !minVal) { toast('⚠️ 請選擇發送日期與時間'); return; }
   const timeVal = hourVal + ':' + minVal;
 
+  // 防呆：選的時間不能早於現在台灣時間
+  const [mm, dd] = dateVal.split('/');
+  const twNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+  const selectedTW = new Date(twNow.getFullYear(), parseInt(mm)-1, parseInt(dd), parseInt(hourVal), parseInt(minVal));
+  if (selectedTW <= twNow) {
+    toast('⚠️ 發送時間已過，請選擇未來的時間');
+    return;
+  }
+
   // 從 openSendModal 預先比對好的結果取得發送清單
   const messages = (window._modalMessages || []).map(m => ({
     lang:        m.code,
