@@ -772,15 +772,14 @@ function openSendModal(ann, defaultTime) {
 
   // 初始化分 select（00, 05, 10 ... 55）
   const minSel = document.getElementById('modal-time-m');
-  minSel.innerHTML = Array.from({length:12},(_,i)=>`<option value="${String(i*5).padStart(2,'0')}">${String(i*5).padStart(2,'0')}</option>`).join('');
+  minSel.innerHTML = Array.from({length:60},(_,i)=>`<option value="${String(i).padStart(2,'0')}">${String(i).padStart(2,'0')}</option>`).join('');
 
   // 預選時間
   const t = (defaultTime || ann.time || '10:00').substring(0, 5);
   const [th, tm] = t.split(':');
   hourSel.value = th.padStart(2,'0');
   // 分鐘四捨五入到最近的 5 分
-  const tmRounded = String(Math.round(parseInt(tm||'0') / 5) * 5 % 60).padStart(2,'0');
-  minSel.value = tmRounded;
+  minSel.value = String(parseInt(tm||'0')).padStart(2,'0');
 
   // 顯示現在台灣日期時間（24小時制）
   const _twNow = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
