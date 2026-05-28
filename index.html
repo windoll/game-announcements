@@ -915,7 +915,8 @@ async function confirmSend() {
     });
 
     if (!res.ok) throw new Error('n8n 回應錯誤：' + res.status);
-    const data = await res.json();
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : {};
 
     closeModal();
     toast(`✅ 排程已設定！將於 ${dateVal} ${timeVal} 發送`);
