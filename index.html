@@ -375,9 +375,13 @@ body {
           <input type="radio" name="erolabs-maint" value="yes" checked
             onchange="onErolabsMaintChange()"
             style="margin-top:2px;accent-color:#4f46e5;">
-          <div>
+          <div style="flex:1;">
             <div style="font-weight:600;font-size:0.9rem;">包含維護預告</div>
-            <div id="erolabs-maint-preview" style="font-size:0.78rem;color:#6b7280;margin-top:3px;">—</div>
+            <div id="erolabs-maint-select-wrap" style="margin-top:8px;display:none;">
+              <select id="erolabs-maint-select"
+                style="width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.85rem;outline:none;background:white;">
+              </select>
+            </div>
           </div>
         </label>
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:10px;" id="erolabs-opt-no-label">
@@ -1157,39 +1161,33 @@ function removeType(ti, mode) {
 // ── Erolabs 公告產生 ──────────────────────────────────────────
 
 let _erolabsAnn = null;
-let _erolabsMaint = null;
+let _erolabsMaintList = []; // 所有維護預告清單
 
 function buildErolabsDocs(ann) {
   _erolabsAnn = ann;
 
-  // 找日期最近的維護預告（日期 <= 活動公告日期，取最近一筆）
-  const annDateObj = parseDate(ann.date, '00:00');
-  const maintEntries = allData
+  // 收集所有維護預告，依日期近到遠排序
+  _erolabsMaintList = allData
     .filter(a => a.type && a.type.includes('維護預告'))
     .map(a => ({ ...a, _d: parseDate(a.date, '00:00') }))
-    .filter(a => a._d && a._d <= annDateObj)
+    .filter(a => a._d)
     .sort((a, b) => b._d - a._d);
 
-  _erolabsMaint = maintEntries[0] || null;
-
-  // 預設選「包含」若找到維護，否則預設「不包含」
   const yesRadio = document.querySelector('[name="erolabs-maint"][value="yes"]');
   const noRadio  = document.querySelector('[name="erolabs-maint"][value="no"]');
-  if (_erolabsMaint) {
+
+  // 填入下拉選單
+  const sel = document.getElementById('erolabs-maint-select');
+  if (_erolabsMaintList.length) {
+    sel.innerHTML = _erolabsMaintList.map((m, i) =>
+      `<option value="${i}">${m.date}　${m.titleTW || '（無標題）'}</option>`
+    ).join('');
+    yesRadio.disabled = false;
     yesRadio.checked = true;
   } else {
-    noRadio.checked = true;
-  }
-
-  // 更新維護預告預覽文字
-  const preview = document.getElementById('erolabs-maint-preview');
-  if (_erolabsMaint) {
-    preview.textContent = `找到：${_erolabsMaint.date} ${_erolabsMaint.titleTW || '（無標題）'}`;
-    preview.style.color = '#059669';
-  } else {
-    preview.textContent = '找不到符合日期的維護預告';
-    preview.style.color = '#ef4444';
+    sel.innerHTML = '<option value="">找不到任何維護預告</option>';
     yesRadio.disabled = true;
+    noRadio.checked = true;
   }
 
   onErolabsMaintChange();
@@ -1200,70 +1198,78 @@ function onErolabsMaintChange() {
   const val = document.querySelector('[name="erolabs-maint"]:checked')?.value;
   const yesLabel = document.getElementById('erolabs-opt-yes-label');
   const noLabel  = document.getElementById('erolabs-opt-no-label');
+  const wrap     = document.getElementById('erolabs-maint-select-wrap');
   yesLabel.style.borderColor = val === 'yes' ? '#4f46e5' : 'var(--border)';
   yesLabel.style.background  = val === 'yes' ? '#f5f3ff' : '';
   noLabel.style.borderColor  = val === 'no'  ? '#4f46e5' : 'var(--border)';
   noLabel.style.background   = val === 'no'  ? '#f5f3ff' : '';
+  wrap.style.display = val === 'yes' ? 'block' : 'none';
 }
 
 function closeErolabsModal() {
   document.getElementById('modal-erolabs').classList.remove('open');
-  // 重置 disabled
   const yesRadio = document.querySelector('[name="erolabs-maint"][value="yes"]');
   if (yesRadio) yesRadio.disabled = false;
 }
 
 async function confirmBuildErolabs() {
   const withMaint = document.querySelector('[name="erolabs-maint"]:checked')?.value === 'yes';
-  const ann  = _erolabsAnn;
-  const maint = withMaint ? _erolabsMaint : null;
+  const ann = _erolabsAnn;
+  let maint = null;
+  if (withMaint) {
+    const idx = parseInt(document.getElementById('erolabs-maint-select').value);
+    maint = _erolabsMaintList[idx] || null;
+  }
   closeErolabsModal();
   await _doGenerateErolabs(ann, maint);
 }
 
 async function _doGenerateErolabs(ann, maint) {
+  // 標題格式：【M/D】各語系標題
+  const normalized = String(ann.date || '').replace(/^0?(\d+)\/0?(\d+)$/, '$1/$2');
 
   const langs = [
     {
       code: 'TW',
-      title:        ann.titleTW   || '',
+      docTitle:     `【${normalized}】${ann.titleTW || ''}`,
       content:      ann.contentTW || '',
       maintContent: maint ? (maint.contentTW || '') : '',
-      opening:      '親愛的雀士們：\n感謝您一直以來對《雀星》的支持與喜愛！',
+      opening:      maint ? '親愛的雀士們：\n感謝您一直以來對《雀星》的支持與喜愛！' : '',
       filename:     '活動公告_TW',
     },
     {
       code: 'CN',
-      title:        ann.titleCN   || '',
+      docTitle:     `【${normalized}】${ann.titleCN || ''}`,
       content:      ann.contentCN || '',
       maintContent: maint ? (maint.contentCN || '') : '',
-      opening:      '亲爱的雀士们：\n感谢您一直以来对《雀星》的支持与喜爱！',
+      opening:      maint ? '亲爱的雀士们：\n感谢您一直以来对《雀星》的支持与喜爱！' : '',
       filename:     '活動公告_CN',
     },
     {
       code: 'JP',
-      title:        ann.titleJP   || '',
+      docTitle:     `【${normalized}】${ann.titleJP || ''}`,
       content:      ann.contentJP || '',
       maintContent: maint ? (maint.contentJP || '') : '',
-      opening:      '親愛なる雀士の皆様へ\nいつも『ジャンスター』をご愛顧いただき、誠にありがとうございます。',
+      opening:      maint ? '親愛なる雀士の皆様へ\nいつも『ジャンスター』をご愛顧いただき、誠にありがとうございます。' : '',
       filename:     '活動公告_JP',
     },
     {
       code: 'EN',
-      title:        ann.titleEN   || '',
+      docTitle:     `【${normalized}】${ann.titleEN || ''}`,
       content:      ann.contentEN || '',
       maintContent: maint ? (maint.contentEN || '') : '',
-      opening:      'Dear Players,\nThank you for your continued support and passion for Stardom Riichi Mahjong!',
+      opening:      maint ? 'Dear Players,\nThank you for your continued support and passion for Stardom Riichi Mahjong!' : '',
       filename:     '活動公告_EN',
     },
   ];
 
   for (const lang of langs) {
-    // 組合純文字內容
     const parts = [];
-    parts.push(lang.title);
-    parts.push('');
-    parts.push(lang.opening);
+    parts.push(lang.docTitle);
+    if (lang.opening) {
+      parts.push('');
+      parts.push(lang.opening);
+    }
     if (lang.maintContent) {
       parts.push('');
       parts.push(lang.maintContent);
