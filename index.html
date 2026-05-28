@@ -1509,6 +1509,8 @@ async function _loadImgCacheFromGitHub() {
     const json = JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
     Object.assign(_imgCache, json);
     _saveImgCache();
+    // 重新渲染卡片讓圖片連結出現
+    if (typeof renderList === 'function' && allData.length) renderList();
   } catch(e) {
     console.warn('載入 index.json 失敗', e);
   }
