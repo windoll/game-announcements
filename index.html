@@ -362,6 +362,8 @@ body {
 
       <div style="display:flex;gap:10px;margin-top:4px;">
         <button class="btn btn-primary" onclick="saveSettings()">💾 儲存設定</button>
+        <button class="btn btn-outline" onclick="exportSettings()">📤 匯出設定</button>
+        <label class="btn btn-outline" style="cursor:pointer;">📥 匯入設定<input type="file" accept=".json" style="display:none;" onchange="importSettings(event)"></label>
         <button class="btn btn-outline" onclick="loadSettings()">↻ 還原</button>
       </div>
     </div>
@@ -1482,6 +1484,36 @@ function _saveImgCache() {
   localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
 }
 
+// 同步 _imgCache 到 GitHub images/index.json
+async function _syncImgCacheToGitHub() {
+  const token = getCfg().githubToken;
+  if (!token) return;
+  try {
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(_imgCache, null, 2))));
+    await _githubPut(token, 'images/index.json', content);
+  } catch(e) {
+    console.warn('同步 index.json 失敗', e);
+  }
+}
+
+// 從 GitHub 拉 images/index.json 補進 _imgCache
+async function _loadImgCacheFromGitHub() {
+  const token = getCfg().githubToken;
+  if (!token) return;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/images/index.json`, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const json = JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
+    Object.assign(_imgCache, json);
+    _saveImgCache();
+  } catch(e) {
+    console.warn('載入 index.json 失敗', e);
+  }
+}
+
 // 判斷公告類型對應的 GitHub 圖片資料夾
 function _imgFolder(annType, mmdd) {
   if (annType.includes('維護')) return 'images/維護';
@@ -1548,6 +1580,7 @@ async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
     const rawUrl = await _githubPut(token, path, base64);
     _imgCache[annDate] = rawUrl;
     _saveImgCache();
+    _syncImgCacheToGitHub();
     statusEl.textContent = '✅ 上傳成功';
     _updateCardImgPreview(cardId, rawUrl);
     toast('✅ 圖片已上傳');
@@ -1636,6 +1669,7 @@ async function switchImgLibTab(idx) {
 function selectImgFromLibrary(url) {
   _imgCache[_imgLibAnnDate] = url;
   _saveImgCache();
+  _syncImgCacheToGitHub();
   _updateCardImgPreview(_imgLibCardId, url);
   closeImgLibrary();
   toast('✅ 已套用圖片');
@@ -1659,9 +1693,39 @@ function saveSettings() {
   toast('✅ 設定已儲存');
 }
 
+// ── 匯出 / 匯入設定 ──────────────────────────────────────────
+function exportSettings() {
+  const cfg = getCfg();
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '雀星公告設定.json';
+  a.click();
+}
+
+function importSettings(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const cfg = JSON.parse(e.target.result);
+      localStorage.setItem('ann-cfg', JSON.stringify(cfg));
+      loadSettings();
+      applyTestModeUI(!!cfg.testMode);
+      toast('✅ 設定已匯入');
+    } catch {
+      toast('❌ 匯入失敗：檔案格式錯誤');
+    }
+  };
+  reader.readAsText(file);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   checkPassword();
   applyTestModeUI(!!getCfg().testMode);
+  _loadImgCacheFromGitHub();
 });
 </script>
 </body>
