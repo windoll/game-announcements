@@ -1177,11 +1177,11 @@ function buildErolabsDocs(ann) {
   const yesRadio = document.querySelector('[name="erolabs-maint"][value="yes"]');
   const noRadio  = document.querySelector('[name="erolabs-maint"][value="no"]');
 
-  // 填入下拉選單
+  // 填入下拉選單，預設選日期最近的（index 0，已排序）
   const sel = document.getElementById('erolabs-maint-select');
   if (_erolabsMaintList.length) {
     sel.innerHTML = _erolabsMaintList.map((m, i) =>
-      `<option value="${i}">${m.date}　${m.titleTW || '（無標題）'}</option>`
+      `<option value="${i}" ${i === 0 ? 'selected' : ''}>${m.date}　${m.titleTW || '（無標題）'}</option>`
     ).join('');
     yesRadio.disabled = false;
     yesRadio.checked = true;
@@ -1234,7 +1234,7 @@ async function _doGenerateErolabs(ann, maint) {
       code: 'TW',
       docTitle:     `【${normalized}】${ann.titleTW || ''}`,
       content:      ann.contentTW || '',
-      maintContent: maint ? (maint.contentTW || '') : '',
+      maintContent: maint ? trimMaintContent(maint.contentTW || '', 'TW') : '',
       opening:      maint ? '親愛的雀士們：\n感謝您一直以來對《雀星》的支持與喜愛！' : '',
       filename:     '活動公告_TW',
     },
@@ -1242,7 +1242,7 @@ async function _doGenerateErolabs(ann, maint) {
       code: 'CN',
       docTitle:     `【${normalized}】${ann.titleCN || ''}`,
       content:      ann.contentCN || '',
-      maintContent: maint ? (maint.contentCN || '') : '',
+      maintContent: maint ? trimMaintContent(maint.contentCN || '', 'CN') : '',
       opening:      maint ? '亲爱的雀士们：\n感谢您一直以来对《雀星》的支持与喜爱！' : '',
       filename:     '活動公告_CN',
     },
@@ -1250,7 +1250,7 @@ async function _doGenerateErolabs(ann, maint) {
       code: 'JP',
       docTitle:     `【${normalized}】${ann.titleJP || ''}`,
       content:      ann.contentJP || '',
-      maintContent: maint ? (maint.contentJP || '') : '',
+      maintContent: maint ? trimMaintContent(maint.contentJP || '', 'JP') : '',
       opening:      maint ? '親愛なる雀士の皆様へ\nいつも『ジャンスター』をご愛顧いただき、誠にありがとうございます。' : '',
       filename:     '活動公告_JP',
     },
@@ -1258,7 +1258,7 @@ async function _doGenerateErolabs(ann, maint) {
       code: 'EN',
       docTitle:     `【${normalized}】${ann.titleEN || ''}`,
       content:      ann.contentEN || '',
-      maintContent: maint ? (maint.contentEN || '') : '',
+      maintContent: maint ? trimMaintContent(maint.contentEN || '', 'EN') : '',
       opening:      maint ? 'Dear Players,\nThank you for your continued support and passion for Stardom Riichi Mahjong!' : '',
       filename:     '活動公告_EN',
     },
@@ -1318,6 +1318,23 @@ async function _doGenerateErolabs(ann, maint) {
   URL.revokeObjectURL(url);
 
   toast(`✅ 已下載 ${zipName}`);
+}
+
+// 截斷維護預告中「注意事項」後的文字
+function trimMaintContent(text, lang) {
+  if (!text) return '';
+  const cutKeywords = {
+    TW: '【注意事項】',
+    CN: '【注意事项】',
+    JP: '【ご注意】',
+    EN: '[Important Notes]',
+  };
+  const keyword = cutKeywords[lang] || '';
+  if (!keyword) return text;
+  const idx = text.indexOf(keyword);
+  if (idx === -1) return text;
+  // 保留 keyword 之前的內容（去掉結尾空白行）
+  return text.substring(0, idx).trimEnd();
 }
 
 // 將純文字轉成 RTF 格式
