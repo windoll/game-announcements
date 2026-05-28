@@ -315,7 +315,7 @@ body {
             <div style="font-weight:600;font-size:0.95rem;">🧪 測試模式</div>
             <div style="font-size:0.78rem;color:#888;margin-top:3px;">開啟後發送會使用測試頻道和 test webhook URL，不消耗正式 Execution</div>
           </div>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:8px;cursor:pointer;">
             <span id="test-mode-label" style="font-size:0.85rem;color:#888;">關閉</span>
             <div style="position:relative;width:44px;height:24px;">
               <input type="checkbox" id="cfg-test-mode" onchange="toggleTestMode(this.checked)"
@@ -324,7 +324,7 @@ body {
                 <div id="test-mode-thumb" style="position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:white;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left 0.2s;"></div>
               </div>
             </div>
-          </label>
+          </div>
         </div>
       </div>
 
@@ -934,7 +934,6 @@ function toast(msg) {
 
 // ── 設定頁邏輯 ────────────────────────────────────────────────
 
-// 從 localStorage 把值填入設定頁表單
 function loadSettings() {
   const cfg = getCfg();
   document.getElementById('cfg-project-name').value = cfg.projectName || '';
@@ -942,7 +941,6 @@ function loadSettings() {
   document.getElementById('cfg-sheet-gid').value    = cfg.sheetGid   || '';
   renderAnnouncementTypes(cfg.announcementTypes || [], 'prod');
   renderAnnouncementTypes(cfg.testAnnouncementTypes || [], 'test');
-  // 測試模式開關
   const testMode = !!cfg.testMode;
   const chk = document.getElementById('cfg-test-mode');
   if (chk) chk.checked = testMode;
@@ -959,11 +957,26 @@ function toggleTestMode(on) {
 function applyTestModeUI(on) {
   const label = document.getElementById('test-mode-label');
   const track = document.getElementById('test-mode-track');
-  const thumb = document.getElementById('test-mode-thumb');
+  const thumb  = document.getElementById('test-mode-thumb');
   if (label) label.textContent = on ? '開啟' : '關閉';
   if (label) label.style.color = on ? '#f59e0b' : '#888';
   if (track) track.style.background = on ? '#f59e0b' : '#e5e7eb';
-  if (thumb) thumb.style.left = on ? '22px' : '2px';
+  if (thumb)  thumb.style.left = on ? '22px' : '2px';
+
+  // 測試模式整體配色切換
+  const root = document.documentElement;
+  const sidebar = document.querySelector('.sidebar');
+  if (on) {
+    root.style.setProperty('--primary', '#d97706');
+    root.style.setProperty('--primary-hover', '#b45309');
+    root.style.setProperty('--bg', '#fffbeb');
+    if (sidebar) sidebar.style.background = '#78350f';
+  } else {
+    root.style.setProperty('--primary', '#4f46e5');
+    root.style.setProperty('--primary-hover', '#4338ca');
+    root.style.setProperty('--bg', '#f5f6fa');
+    if (sidebar) sidebar.style.background = '#1e1b4b';
+  }
 }
 
 // ── 公告類型設定 ──────────────────────────────────────────────
@@ -1094,52 +1107,21 @@ function removeType(ti, mode) {
 }
 
 function saveSettings() {
-  const name   = document.getElementById('cfg-project-name').value.trim();
-  const sid    = document.getElementById('cfg-sheet-id').value.trim();
-  const sgid   = document.getElementById('cfg-sheet-gid').value.trim();
-
-  if (!sid)  { toast('⚠️ 請填入 Google Sheet ID'); return; }
-  if (!sgid) { toast('⚠️ 請填入 Google Sheet GID'); return; }
-
   const cfg = getCfg();
   const updated = Object.assign({}, cfg, {
-    projectName: name || DEFAULTS.projectName,
-    sheetId:     sid,
-    sheetGid:    sgid,
-    // announcementTypes 已即時寫入，不需要再讀表單
+    projectName: document.getElementById('cfg-project-name').value.trim(),
+    sheetId:     document.getElementById('cfg-sheet-id').value.trim(),
+    sheetGid:    document.getElementById('cfg-sheet-gid').value.trim(),
   });
   localStorage.setItem('ann-cfg', JSON.stringify(updated));
-
-  // 更新側邊欄標題
-  applyProjectName(updated.projectName);
-
-  toast('✅ 設定已儲存！重新整理公告列表...');
-  setTimeout(loadSheet, 800);
+  document.querySelector('.sidebar .project-name') &&
+    (document.querySelector('.sidebar .project-name').textContent = updated.projectName);
+  toast('✅ 設定已儲存');
 }
 
-function applyProjectName(name) {
-  const el = document.querySelector('.sidebar h2');
-  if (el) el.textContent = '🀄 ' + (name || DEFAULTS.projectName);
-}
-
-function escHtml(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// ── 點擊背景關閉 modal ────────────────────────────────────────
-document.getElementById('modal-send').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
+window.addEventListener('DOMContentLoaded', () => {
+  checkPassword();
 });
-
-// ── 初始化（解鎖後由 checkPassword 或 sessionStorage 判斷呼叫）────
-function initApp() {
-  const cfg = getCfg();
-  applyProjectName(cfg.projectName);
-  loadSettings();
-  loadSheet();
-}
-
-if (sessionStorage.getItem('unlocked') === '1') initApp();
 </script>
 </body>
 </html>
