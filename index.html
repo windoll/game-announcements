@@ -248,7 +248,7 @@ body {
 <div class="layout">
   <!-- 側邊欄 -->
   <nav class="sidebar">
-    <h2>🀄 雀星公告管理</h2>
+    <h2>🀄 <span class="project-name">公告管理</span></h2>
     <button class="nav-btn active" onclick="showPage('list')">📋 公告列表</button>
     <button class="nav-btn" onclick="showPage('settings')">⚙️ 設定</button>
   </nav>
@@ -1080,6 +1080,8 @@ function loadSettings() {
   document.getElementById('cfg-sheet-id').value      = cfg.sheetId      || '';
   document.getElementById('cfg-sheet-gid').value     = cfg.sheetGid     || '';
   document.getElementById('cfg-github-token').value  = cfg.githubToken  || '';
+  const pn = document.querySelector('.sidebar .project-name');
+  if (pn && cfg.projectName) pn.textContent = cfg.projectName;
   renderAnnouncementTypes(cfg.announcementTypes || [], 'prod');
   renderAnnouncementTypes(cfg.testAnnouncementTypes || [], 'test');
   const testMode = !!cfg.testMode;
