@@ -642,7 +642,7 @@ function renderList() {
   ${langTags}
   ${a.image && a.image !== '...' ? `<div style="margin-top:5px;font-size:0.75rem;" onclick="event.stopPropagation()"><a href="${a.image}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a></div>` : ''}
   ${contentHtml}
-  ${!isDraft ? `
+  ${!isDraft && st !== 'past' ? `
   <div class="ann-actions" onclick="event.stopPropagation()">
     <button class="btn btn-green btn-sm" onclick="openSendModal(${JSON.stringify(a).replace(/"/g,'&quot;')}, '${defaultTime}')">
       ✈️ 發送到 Discord
