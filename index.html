@@ -395,6 +395,7 @@ body {
 
 <div id="toast"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.min.js"></script>
 <script>
 // ── 預設設定（可在設定頁覆蓋，存於 localStorage）─────────────
 const DEFAULTS = {
@@ -653,9 +654,10 @@ function renderList() {
       const langTags =
         '<hr class="lang-divider">' +
         mkCheck('TW', a.titleTW) +
+        mkCheck('CN', a.titleCN) +
         mkCheck('JP', a.titleJP) +
         mkCheck('EN', a.titleEN);
-      const isDraft = !a.contentTW && !a.contentJP && !a.contentEN;
+      const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
 
       // 預設發送時間（試算表時間）
       const defaultTime = a.time || '10:00';
@@ -669,6 +671,7 @@ function renderList() {
         contentHtml =
           '<div class="ann-content">' +
           mkContent('TW', a.contentTW) +
+          mkContent('CN', a.contentCN) +
           mkContent('JP', a.contentJP) +
           mkContent('EN', a.contentEN) +
           '</div>';
@@ -692,6 +695,9 @@ function renderList() {
     <button class="btn btn-green btn-sm" onclick="openSendModal(${JSON.stringify(a).replace(/"/g,'&quot;')}, '${defaultTime}')">
       ✈️ 發送到 Discord
     </button>
+    ${a.type && a.type.includes('活動') ? `<button class="btn btn-outline btn-sm" onclick="buildErolabsDocs(${JSON.stringify(a).replace(/"/g,'&quot;')})">
+      📄 建立 Erolabs 公告
+    </button>` : ''}
   </div>` : ''}
 </div>`;
     });
@@ -1114,6 +1120,117 @@ function removeType(ti, mode) {
   types.splice(ti, 1);
   saveTypes(types, mode);
   renderAnnouncementTypes(types, mode);
+}
+
+// ── Erolabs 公告產生 ──────────────────────────────────────────
+
+async function buildErolabsDocs(ann) {
+  // 找日期最近的維護預告（日期 <= 活動公告日期，取最近一筆）
+  const annDateObj = parseDate(ann.date, '00:00');
+  const maintEntries = allData
+    .filter(a => a.type && a.type.includes('維護預告'))
+    .map(a => ({ ...a, _d: parseDate(a.date, '00:00') }))
+    .filter(a => a._d && a._d <= annDateObj)
+    .sort((a, b) => b._d - a._d); // 最近的排前面
+
+  const maint = maintEntries[0] || null;
+
+  // 各語系設定
+  const langs = [
+    {
+      code: 'TW',
+      title:   ann.titleTW   || '',
+      content: ann.contentTW || '',
+      maintContent: maint ? (maint.contentTW || '') : '',
+      opening: '親愛的雀士們：\n感謝您一直以來對《雀星》的支持與喜愛！',
+      filename: '活動公告_TW',
+    },
+    {
+      code: 'CN',
+      title:   ann.titleCN   || '',
+      content: ann.contentCN || '',
+      maintContent: maint ? (maint.contentCN || '') : '',
+      opening: '亲爱的雀士们：\n感谢您一直以来对《雀星》的支持与喜爱！',
+      filename: '活動公告_CN',
+    },
+    {
+      code: 'JP',
+      title:   ann.titleJP   || '',
+      content: ann.contentJP || '',
+      maintContent: maint ? (maint.contentJP || '') : '',
+      opening: '親愛なる雀士の皆様へ\nいつも『ジャンスター』をご愛顧いただき、誠にありがとうございます。',
+      filename: '活動公告_JP',
+    },
+    {
+      code: 'EN',
+      title:   ann.titleEN   || '',
+      content: ann.contentEN || '',
+      maintContent: maint ? (maint.contentEN || '') : '',
+      opening: 'Dear Players,\nThank you for your continued support and passion for Stardom Riichi Mahjong!',
+      filename: '活動公告_EN',
+    },
+  ];
+
+  const { Document, Paragraph, TextRun, HeadingLevel, Packer, AlignmentType } = docx;
+
+  for (const lang of langs) {
+    // 組合段落
+    const paragraphs = [];
+
+    // 標題
+    if (lang.title) {
+      paragraphs.push(new Paragraph({
+        text: lang.title,
+        heading: HeadingLevel.HEADING_1,
+        spacing: { after: 200 },
+      }));
+    }
+
+    // 開頭
+    paragraphs.push(...textToParagraphs(lang.opening, { spacing: { after: 120 } }));
+
+    // 維護段落（如果有）
+    if (lang.maintContent) {
+      paragraphs.push(...textToParagraphs(lang.maintContent, { spacing: { after: 120 } }));
+    }
+
+    // 活動內容
+    if (lang.content) {
+      paragraphs.push(...textToParagraphs(lang.content, { spacing: { after: 120 } }));
+    }
+
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: paragraphs,
+      }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = lang.filename + '.docx';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    // 間隔一下避免瀏覽器攔截多個下載
+    await new Promise(r => setTimeout(r, 400));
+  }
+
+  toast('✅ 已產生 4 個語系的 Erolabs 公告');
+}
+
+// 將多行文字轉成 docx Paragraph 陣列
+function textToParagraphs(text, opts = {}) {
+  const { Document, Paragraph, TextRun } = docx;
+  return String(text).split('\n').map(line =>
+    new Paragraph({
+      children: [new TextRun({ text: line })],
+      spacing: { after: 80 },
+      ...opts,
+    })
+  );
 }
 
 function saveSettings() {
