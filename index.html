@@ -718,7 +718,7 @@ function renderList() {
       // 維護預告日期防呆
       let cardDateWarn = '';
       if (a.type && a.type.includes('維護預告') && a.contentTW) {
-        const mMatch = a.contentTW.match(/【維護時間】[^\n]*?(\d{4})年(\d{1,2})月(\d{1,2})日/);
+        const mMatch = a.contentTW.match(/維護時間[\s\S]*?(\d{4})年(\d{1,2})月(\d{1,2})日/);
         if (mMatch) {
           const cM = parseInt(mMatch[2], 10), cD = parseInt(mMatch[3], 10);
           const sParts = (a.date || '').replace(/^0*(\d+)\/0*(\d+)$/, '$1/$2').split('/');
@@ -876,7 +876,7 @@ function openSendModal(ann, defaultTime) {
   warnEl.textContent = '';
   if (annType.includes('維護預告') && ann.contentTW) {
     // 從 TW 內容抓 【維護時間】 後的日期
-    const maintMatch = ann.contentTW.match(/【維護時間】[^\n]*?(\d{4})年(\d{1,2})月(\d{1,2})日/);
+    const maintMatch = ann.contentTW.match(/維護時間[\s\S]*?(\d{4})年(\d{1,2})月(\d{1,2})日/);
     if (maintMatch) {
       const contentMonth = parseInt(maintMatch[2], 10);
       const contentDay   = parseInt(maintMatch[3], 10);
