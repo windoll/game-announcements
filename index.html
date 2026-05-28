@@ -795,11 +795,32 @@ function openSendModal(ann, defaultTime) {
   document.getElementById('modal-thread').textContent = threadName;
   document.getElementById('modal-content').textContent = contentStr.substring(0, 300) + (contentStr.length > 300 ? '...' : '');
 
-  // 初始化日期 select：今天起往後 14 天（台灣時間）
+  // 依公告類型決定預設時間和日期偏移
+  const annType = ann.type || '';
+  let defaultH = '10', defaultM = '00', dateOffset = 0;
+  if (annType.includes('活動')) {
+    defaultH = '17'; defaultM = '00'; dateOffset = -1; // 前一天
+  } else if (annType.includes('維護預告')) {
+    defaultH = '09'; defaultM = '00'; dateOffset = 0;  // 當天
+  } else if (annType.includes('維護完成')) {
+    defaultH = '12'; defaultM = '30'; dateOffset = 0;  // 當天
+  }
+
+  // 初始化日期 select：今天起往後 30 天（台灣時間）
   const _twToday = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
   const dateSel = document.getElementById('modal-date');
   dateSel.innerHTML = '';
-  for (let i = 0; i < 14; i++) {
+
+  // 計算目標預選日期（ann.date ± offset）
+  const annDateParts = (ann.date || '').replace(/^0*(\d+)\/0*(\d+)$/, '$1/$2').split('/');
+  let targetDate = null;
+  if (annDateParts.length === 2) {
+    const y = _twToday.getFullYear();
+    targetDate = new Date(y, parseInt(annDateParts[0]) - 1, parseInt(annDateParts[1]));
+    targetDate.setDate(targetDate.getDate() + dateOffset);
+  }
+
+  for (let i = 0; i < 30; i++) {
     const d = new Date(_twToday);
     d.setDate(d.getDate() + i);
     const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -808,10 +829,11 @@ function openSendModal(ann, defaultTime) {
     const opt = document.createElement('option');
     opt.value = val;
     opt.textContent = val;
-    // 預選公告日期（ann.date 格式可能是 M/D 或 MM/DD）
-    const annDate = (ann.date || '').replace(/^0*(\d+)\/0*(\d+)$/, (_, m, d2) =>
-      String(m).padStart(2,'0') + '/' + String(d2).padStart(2,'0'));
-    if (val === annDate || (i === 0 && !annDate)) opt.selected = true;
+    // 預選目標日期
+    const isTarget = targetDate &&
+      d.getMonth() === targetDate.getMonth() &&
+      d.getDate() === targetDate.getDate();
+    if (isTarget || (!targetDate && i === 0)) opt.selected = true;
     dateSel.appendChild(opt);
   }
 
@@ -819,16 +841,13 @@ function openSendModal(ann, defaultTime) {
   const hourSel = document.getElementById('modal-time-h');
   hourSel.innerHTML = Array.from({length:24},(_,h)=>`<option value="${String(h).padStart(2,'0')}">${String(h).padStart(2,'0')}</option>`).join('');
 
-  // 初始化分 select（00, 05, 10 ... 55）
+  // 初始化分 select（00–59）
   const minSel = document.getElementById('modal-time-m');
   minSel.innerHTML = Array.from({length:60},(_,i)=>`<option value="${String(i).padStart(2,'0')}">${String(i).padStart(2,'0')}</option>`).join('');
 
-  // 預選時間
-  const t = (defaultTime || ann.time || '10:00').substring(0, 5);
-  const [th, tm] = t.split(':');
-  hourSel.value = th.padStart(2,'0');
-  // 分鐘四捨五入到最近的 5 分
-  minSel.value = String(parseInt(tm||'0')).padStart(2,'0');
+  // 預選時間（依類型預設）
+  hourSel.value = defaultH.padStart(2,'0');
+  minSel.value = defaultM.padStart(2,'0');
 
   // 顯示現在台灣日期時間（24小時制）
   const _twNow = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -1084,309 +1103,4 @@ function renderAnnouncementTypes(types, mode) {
     oninput="updateTypeLang(${ti},${li},'webhook',this.value,'${mode}')"
     style="flex:1;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.8rem;font-family:monospace;outline:none;">
   <button onclick="removeLang(${ti},${li},'${mode}')" title="刪除此語系"
-    style="background:none;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:0.8rem;">✕</button>
-</div>`;
-    }).join('');
-
-    return `
-<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-    <input type="text" value="${escHtml(t.name)}" placeholder="類型名稱（例：維護更新）"
-      oninput="updateTypeName(${ti},this.value,'${mode}')"
-      style="flex:1;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.9rem;font-weight:600;outline:none;">
-    ${canAddLang ? `<button onclick="addLang(${ti},'${mode}')" style="background:none;border:1px solid #6366f1;color:#6366f1;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.8rem;">＋ 語系</button>` : ''}
-    <button onclick="removeType(${ti},'${mode}')" title="刪除此類型"
-      style="background:none;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.8rem;">✕ 刪除</button>
-  </div>
-  ${langRows}
-</div>`;
-  }).join('');
-}
-
-function updateTypeName(ti, val, mode) {
-  const types = getTypes(mode);
-  if (!types[ti]) return;
-  types[ti].name = val;
-  saveTypes(types, mode);
-}
-
-function updateTypeLang(ti, li, field, val, mode) {
-  const types = getTypes(mode);
-  if (!types[ti] || !types[ti].langs[li]) return;
-  types[ti].langs[li][field] = val;
-  saveTypes(types, mode);
-  renderAnnouncementTypes(types, mode);
-}
-
-function removeLang(ti, li, mode) {
-  const types = getTypes(mode);
-  if (!types[ti]) return;
-  types[ti].langs.splice(li, 1);
-  saveTypes(types, mode);
-  renderAnnouncementTypes(types, mode);
-}
-
-function addLang(ti, mode) {
-  const types = getTypes(mode);
-  if (!types[ti]) return;
-  const usedLangs = types[ti].langs.map(l => l.lang);
-  const hasSpecific = usedLangs.some(v => v !== 'all');
-  const hasAll = usedLangs.includes('all');
-  const candidates = ['TW', 'JP', 'EN', 'all'].filter(v => {
-    if (usedLangs.includes(v)) return false;
-    if (v === 'all' && hasSpecific) return false;
-    if (v !== 'all' && hasAll) return false;
-    return true;
-  });
-  const available = candidates[0];
-  if (!available) return;
-  types[ti].langs.push({ lang: available, webhook: '' });
-  saveTypes(types, mode);
-  renderAnnouncementTypes(types, mode);
-}
-
-function addAnnouncementType(mode) {
-  const types = getTypes(mode);
-  types.push({ name: '新類型', langs: [{ lang: 'TW', webhook: '' }] });
-  saveTypes(types, mode);
-  renderAnnouncementTypes(types, mode);
-}
-
-function removeType(ti, mode) {
-  const types = getTypes(mode);
-  types.splice(ti, 1);
-  saveTypes(types, mode);
-  renderAnnouncementTypes(types, mode);
-}
-
-// ── Erolabs 公告產生 ──────────────────────────────────────────
-
-let _erolabsAnn = null;
-let _erolabsMaintList = []; // 所有維護預告清單
-
-function buildErolabsDocs(ann) {
-  _erolabsAnn = ann;
-
-  // 收集所有維護預告，依日期近到遠排序
-  _erolabsMaintList = allData
-    .filter(a => a.type && a.type.includes('維護預告'))
-    .map(a => ({ ...a, _d: parseDate(a.date, '00:00') }))
-    .filter(a => a._d)
-    .sort((a, b) => b._d - a._d);
-
-  const yesRadio = document.querySelector('[name="erolabs-maint"][value="yes"]');
-  const noRadio  = document.querySelector('[name="erolabs-maint"][value="no"]');
-
-  // 填入下拉選單，預設選日期最近的（index 0，已排序）
-  const sel = document.getElementById('erolabs-maint-select');
-  if (_erolabsMaintList.length) {
-    sel.innerHTML = _erolabsMaintList.map((m, i) =>
-      `<option value="${i}" ${i === 0 ? 'selected' : ''}>${m.date}　${m.titleTW || '（無標題）'}</option>`
-    ).join('');
-    yesRadio.disabled = false;
-    yesRadio.checked = true;
-  } else {
-    sel.innerHTML = '<option value="">找不到任何維護預告</option>';
-    yesRadio.disabled = true;
-    noRadio.checked = true;
-  }
-
-  onErolabsMaintChange();
-  document.getElementById('modal-erolabs').classList.add('open');
-}
-
-function onErolabsMaintChange() {
-  const val = document.querySelector('[name="erolabs-maint"]:checked')?.value;
-  const yesLabel = document.getElementById('erolabs-opt-yes-label');
-  const noLabel  = document.getElementById('erolabs-opt-no-label');
-  const wrap     = document.getElementById('erolabs-maint-select-wrap');
-  yesLabel.style.borderColor = val === 'yes' ? '#4f46e5' : 'var(--border)';
-  yesLabel.style.background  = val === 'yes' ? '#f5f3ff' : '';
-  noLabel.style.borderColor  = val === 'no'  ? '#4f46e5' : 'var(--border)';
-  noLabel.style.background   = val === 'no'  ? '#f5f3ff' : '';
-  wrap.style.display = val === 'yes' ? 'block' : 'none';
-}
-
-function closeErolabsModal() {
-  document.getElementById('modal-erolabs').classList.remove('open');
-  const yesRadio = document.querySelector('[name="erolabs-maint"][value="yes"]');
-  if (yesRadio) yesRadio.disabled = false;
-}
-
-async function confirmBuildErolabs() {
-  const withMaint = document.querySelector('[name="erolabs-maint"]:checked')?.value === 'yes';
-  const ann = _erolabsAnn;
-  let maint = null;
-  if (withMaint) {
-    const idx = parseInt(document.getElementById('erolabs-maint-select').value);
-    maint = _erolabsMaintList[idx] || null;
-  }
-  closeErolabsModal();
-  await _doGenerateErolabs(ann, maint);
-}
-
-async function _doGenerateErolabs(ann, maint) {
-  // 標題格式：【M/D】各語系標題
-  const normalized = String(ann.date || '').replace(/^0?(\d+)\/0?(\d+)$/, '$1/$2');
-
-  const langs = [
-    {
-      code: 'TW',
-      docTitle:     `【${normalized}】${ann.titleTW || ''}`,
-      content:      ann.contentTW || '',
-      maintContent: maint ? trimMaintContent(maint.contentTW || '', 'TW') : '',
-      opening:      maint ? '親愛的雀士們：\n感謝您一直以來對《雀星》的支持與喜愛！' : '',
-      filename:     '活動公告_TW',
-    },
-    {
-      code: 'CN',
-      docTitle:     `【${normalized}】${ann.titleCN || ''}`,
-      content:      ann.contentCN || '',
-      maintContent: maint ? trimMaintContent(maint.contentCN || '', 'CN') : '',
-      opening:      maint ? '亲爱的雀士们：\n感谢您一直以来对《雀星》的支持与喜爱！' : '',
-      filename:     '活動公告_CN',
-    },
-    {
-      code: 'JP',
-      docTitle:     `【${normalized}】${ann.titleJP || ''}`,
-      content:      ann.contentJP || '',
-      maintContent: maint ? trimMaintContent(maint.contentJP || '', 'JP') : '',
-      opening:      maint ? '親愛なる雀士の皆様へ\nいつも『ジャンスター』をご愛顧いただき、誠にありがとうございます。' : '',
-      filename:     '活動公告_JP',
-    },
-    {
-      code: 'EN',
-      docTitle:     `【${normalized}】${ann.titleEN || ''}`,
-      content:      ann.contentEN || '',
-      maintContent: maint ? trimMaintContent(maint.contentEN || '', 'EN') : '',
-      opening:      maint ? 'Dear Players,\nThank you for your continued support and passion for Stardom Riichi Mahjong!' : '',
-      filename:     '活動公告_EN',
-    },
-  ];
-
-  const zip = new JSZip();
-
-  // 加入 4 個語系的 .doc
-  for (const lang of langs) {
-    const parts = [];
-    parts.push(lang.docTitle);
-    if (lang.opening) {
-      parts.push('');
-      parts.push(lang.opening);
-    }
-    if (lang.maintContent) {
-      parts.push('');
-      parts.push(lang.maintContent);
-    }
-    if (lang.content) {
-      parts.push('');
-      parts.push(lang.content);
-    }
-    const fullText = parts.join('\n');
-    const rtf = textToRtf(fullText);
-    zip.file(lang.filename + '.doc', rtf);
-  }
-
-  // 嘗試下載圖片，失敗則放圖片連結 txt
-  const imageUrl = ann.image && ann.image !== '...' ? ann.image : '';
-  if (imageUrl) {
-    try {
-      const imgRes = await fetch(imageUrl);
-      if (!imgRes.ok) throw new Error('fetch failed');
-      const imgBlob = await imgRes.blob();
-      const ext = imageUrl.split('?')[0].split('.').pop().toLowerCase() || 'jpg';
-      zip.file(`活動圖片.${ext}`, imgBlob);
-    } catch {
-      // CORS 或其他錯誤，改放連結 txt
-      zip.file('活動圖片連結.txt', imageUrl);
-    }
-  }
-
-  // zip 名稱：雀星_MMDD公告_Erolabs.zip
-  const [rawM, rawD] = normalized.split('/');
-  const mmdd = String(rawM).padStart(2,'0') + String(rawD).padStart(2,'0');
-  const zipName = `雀星_${mmdd}公告_Erolabs.zip`;
-
-  const zipBlob = await zip.generateAsync({ type: 'blob' });
-  const url = URL.createObjectURL(zipBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = zipName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  toast(`✅ 已下載 ${zipName}`);
-}
-
-// 截斷維護預告中「注意事項」後的文字
-function trimMaintContent(text, lang) {
-  if (!text) return '';
-  const cutKeywords = {
-    TW: '【注意事項】',
-    CN: '【注意事项】',
-    JP: '【ご注意】',
-    EN: '[Important Notes]',
-  };
-  const keyword = cutKeywords[lang] || '';
-  if (!keyword) return text;
-  const idx = text.indexOf(keyword);
-  if (idx === -1) return text;
-  // 保留 keyword 之前的內容（去掉結尾空白行）
-  return text.substring(0, idx).trimEnd();
-}
-
-// 將純文字轉成 RTF 格式
-function textToRtf(text) {
-  // RTF 需要將 Unicode 字元轉成 \uNNNN? 形式
-  function escRtf(str) {
-    let out = '';
-    for (const ch of str) {
-      const code = ch.codePointAt(0);
-      if (code < 128) {
-        // ASCII 特殊字元需跳脫
-        if (ch === '\\') out += '\\\\';
-        else if (ch === '{')  out += '\\{';
-        else if (ch === '}')  out += '\\}';
-        else out += ch;
-      } else {
-        // Unicode → RTF \uNNNN? 語法（? 是替代字元）
-        const signed = code > 32767 ? code - 65536 : code;
-        out += `\\u${signed}?`;
-      }
-    }
-    return out;
-  }
-
-  const lines = text.split('\n');
-  const rtfLines = lines.map(line => `${escRtf(line)}\\par`).join('\n');
-
-  return `{\\rtf1\\ansi\\ansicpg950\\deff0
-{\\fonttbl{\\f0\\froman\\fcharset136 Times New Roman;}}
-{\\colortbl;}
-\\f0\\fs24
-${rtfLines}
-}`;
-}
-
-function saveSettings() {
-  const cfg = getCfg();
-  const updated = Object.assign({}, cfg, {
-    projectName: document.getElementById('cfg-project-name').value.trim(),
-    sheetId:     document.getElementById('cfg-sheet-id').value.trim(),
-    sheetGid:    document.getElementById('cfg-sheet-gid').value.trim(),
-  });
-  localStorage.setItem('ann-cfg', JSON.stringify(updated));
-  document.querySelector('.sidebar .project-name') &&
-    (document.querySelector('.sidebar .project-name').textContent = updated.projectName);
-  toast('✅ 設定已儲存');
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-  checkPassword();
-  applyTestModeUI(!!getCfg().testMode);
-});
-</script>
-</body>
-</html>
+    style="background:none;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:5px 9px;cursor:pointer;f
