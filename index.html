@@ -609,7 +609,7 @@ function renderList() {
         '<hr class="lang-divider">' +
         mkCheck('TW', a.titleTW) +
         mkCheck('JP', a.titleJP) +
-        mkCheck('US', a.titleEN);
+        mkCheck('EN', a.titleEN);
       const isDraft = !a.contentTW && !a.contentJP && !a.contentEN;
 
       // 預設發送時間（試算表時間）
@@ -625,7 +625,7 @@ function renderList() {
           '<div class="ann-content">' +
           mkContent('TW', a.contentTW) +
           mkContent('JP', a.contentJP) +
-          mkContent('US', a.contentEN) +
+          mkContent('EN', a.contentEN) +
           '</div>';
       }
 
