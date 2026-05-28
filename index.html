@@ -715,6 +715,22 @@ function renderList() {
           '</div>';
       }
 
+      // 維護預告日期防呆
+      let cardDateWarn = '';
+      if (a.type && a.type.includes('維護預告') && a.contentTW) {
+        const mMatch = a.contentTW.match(/【維護時間】[^\n]*?(\d{4})年(\d{1,2})月(\d{1,2})日/);
+        if (mMatch) {
+          const cM = parseInt(mMatch[2], 10), cD = parseInt(mMatch[3], 10);
+          const sParts = (a.date || '').replace(/^0*(\d+)\/0*(\d+)$/, '$1/$2').split('/');
+          if (sParts.length === 2) {
+            const sM = parseInt(sParts[0], 10), sD = parseInt(sParts[1], 10);
+            if (cM !== sM || cD !== sD) {
+              cardDateWarn = `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:6px 10px;margin:6px 0 2px;font-size:0.78rem;color:#92400e;">⚠️ <strong>日期不符</strong>：Sheet 日期 <strong>${a.date}</strong>，內文維護時間為 <strong>${cM}/${cD}</strong></div>`;
+            }
+          }
+        }
+      }
+
       html += `
 <div class="ann-card" id="card-${id}" style="border-left-color:${bc}" onclick="toggleCard('${id}')">
   <div class="ann-top">
@@ -725,6 +741,7 @@ function renderList() {
     ${!isDraft ? '<span class="expand-arrow">▼</span>' : ''}
   </div>
   <div class="ann-title">${a.titleTW || '（無標題）'}</div>
+  ${cardDateWarn}
   ${langTags}
   ${a.image && a.image !== '...' ? `<div style="margin-top:5px;font-size:0.75rem;" onclick="event.stopPropagation()"><a href="${a.image}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a></div>` : ''}
   ${contentHtml}
