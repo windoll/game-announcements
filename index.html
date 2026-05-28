@@ -249,6 +249,7 @@ body {
   <!-- 側邊欄 -->
   <nav class="sidebar">
     <h2>🀄 <span class="project-name">公告管理</span></h2>
+    <div id="test-mode-banner" style="display:none;background:#f59e0b;color:#78350f;font-size:0.78rem;font-weight:700;text-align:center;padding:4px 8px;border-radius:6px;margin-bottom:8px;letter-spacing:0.05em;">🧪 測試模式中</div>
     <button class="nav-btn active" onclick="showPage('list')">📋 公告列表</button>
     <button class="nav-btn" onclick="showPage('settings')">⚙️ 設定</button>
   </nav>
@@ -1109,16 +1110,19 @@ function applyTestModeUI(on) {
   // 測試模式整體配色切換
   const root = document.documentElement;
   const sidebar = document.querySelector('.sidebar');
+  const banner = document.getElementById('test-mode-banner');
   if (on) {
     root.style.setProperty('--primary', '#d97706');
     root.style.setProperty('--primary-hover', '#b45309');
     root.style.setProperty('--bg', '#fffbeb');
     if (sidebar) sidebar.style.background = '#78350f';
+    if (banner) banner.style.display = 'block';
   } else {
     root.style.setProperty('--primary', '#4f46e5');
     root.style.setProperty('--primary-hover', '#4338ca');
     root.style.setProperty('--bg', '#f5f6fa');
     if (sidebar) sidebar.style.background = '#1e1b4b';
+    if (banner) banner.style.display = 'none';
   }
 }
 
