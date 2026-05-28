@@ -308,12 +308,43 @@ body {
         <div style="font-size:0.75rem;color:#888;margin-top:4px;">在試算表網址 ?gid= 後面的數字</div>
       </div>
 
+      <!-- 測試模式開關 -->
+      <div class="card" style="margin-top:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-weight:600;font-size:0.95rem;">🧪 測試模式</div>
+            <div style="font-size:0.78rem;color:#888;margin-top:3px;">開啟後發送會使用測試頻道和 test webhook URL，不消耗正式 Execution</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <span id="test-mode-label" style="font-size:0.85rem;color:#888;">關閉</span>
+            <div style="position:relative;width:44px;height:24px;">
+              <input type="checkbox" id="cfg-test-mode" onchange="toggleTestMode(this.checked)"
+                style="opacity:0;width:0;height:0;position:absolute;">
+              <div id="test-mode-track" style="position:absolute;inset:0;border-radius:12px;background:#e5e7eb;transition:background 0.2s;cursor:pointer;" onclick="document.getElementById('cfg-test-mode').click()">
+                <div id="test-mode-thumb" style="position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:white;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left 0.2s;"></div>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- 正式頻道設定 -->
       <div class="card" style="margin-top:0;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div style="font-weight:600;font-size:0.95rem;">📢 Discord 頻道設定</div>
-          <button class="btn btn-outline btn-sm" onclick="addAnnouncementType()">＋ 新增類型</button>
+          <div style="font-weight:600;font-size:0.95rem;">📢 正式頻道設定</div>
+          <button class="btn btn-outline btn-sm" onclick="addAnnouncementType('prod')">＋ 新增類型</button>
         </div>
         <div id="cfg-announcement-types"></div>
+        <div style="font-size:0.75rem;color:#888;margin-top:8px;">Webhook URL 格式：https://discord.com/api/webhooks/...</div>
+      </div>
+
+      <!-- 測試頻道設定 -->
+      <div class="card" style="margin-top:0;border:1px solid #fbbf24;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div style="font-weight:600;font-size:0.95rem;">🧪 測試頻道設定</div>
+          <button class="btn btn-outline btn-sm" onclick="addAnnouncementType('test')">＋ 新增類型</button>
+        </div>
+        <div id="cfg-test-announcement-types"></div>
         <div style="font-size:0.75rem;color:#888;margin-top:8px;">Webhook URL 格式：https://discord.com/api/webhooks/...</div>
       </div>
 
@@ -378,10 +409,14 @@ const DEFAULTS = {
       ]
     }
   ],
+  testAnnouncementTypes: [],
+  testMode: false,
 };
-const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
-const SECRET_TOKEN       = 'zx9k-Q7mP-4rNw-Hj2T';
-const N8N_WEBHOOK        = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
+const PAGE_PASSWORD_HASH  = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
+const SECRET_TOKEN        = 'zx9k-Q7mP-4rNw-Hj2T';
+const N8N_WEBHOOK_PROD    = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
+const N8N_WEBHOOK_TEST    = 'https://charlie98783.app.n8n.cloud/webhook-test/send-announcement';
+function N8N_WEBHOOK() { return getCfg().testMode ? N8N_WEBHOOK_TEST : N8N_WEBHOOK_PROD; }
 
 // ── 從 localStorage 讀取設定 ──────────────────────────────────
 function getCfg() {
@@ -675,8 +710,9 @@ function openSendModal(ann, defaultTime) {
   let contentStr = content.join('\n\n---\n\n');
   if (ann.image && ann.image !== '...') contentStr += '\n\n' + ann.image;
 
-  // 所有設定的公告類型
-  const announcementTypes = getCfg().announcementTypes || [];
+  // 所有設定的公告類型（test mode 時用測試類型）
+  const cfg = getCfg();
+  const announcementTypes = (cfg.testMode ? cfg.testAnnouncementTypes : cfg.announcementTypes) || [];
   const annType = ann.type || '';
 
   // 模糊比對預設選中的類型 index
@@ -751,7 +787,8 @@ function openSendModal(ann, defaultTime) {
 
 // 根據選中的類型 index 渲染語系預覽，並更新 _modalMessages
 function renderModalLangs(typeIdx) {
-  const announcementTypes = getCfg().announcementTypes || [];
+  const cfg = getCfg();
+  const announcementTypes = (cfg.testMode ? cfg.testAnnouncementTypes : cfg.announcementTypes) || [];
   const t = announcementTypes[typeIdx];
   const ann = window._modalAnn || {};
   const langDefs = [
@@ -867,7 +904,7 @@ async function confirmSend() {
       messages,
     };
 
-    const res = await fetch(N8N_WEBHOOK, {
+    const res = await fetch(N8N_WEBHOOK(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Secret': SECRET_TOKEN },
       body: JSON.stringify(payload)
@@ -903,22 +940,49 @@ function loadSettings() {
   document.getElementById('cfg-project-name').value = cfg.projectName || '';
   document.getElementById('cfg-sheet-id').value     = cfg.sheetId    || '';
   document.getElementById('cfg-sheet-gid').value    = cfg.sheetGid   || '';
-  renderAnnouncementTypes(cfg.announcementTypes || []);
+  renderAnnouncementTypes(cfg.announcementTypes || [], 'prod');
+  renderAnnouncementTypes(cfg.testAnnouncementTypes || [], 'test');
+  // 測試模式開關
+  const testMode = !!cfg.testMode;
+  const chk = document.getElementById('cfg-test-mode');
+  if (chk) chk.checked = testMode;
+  applyTestModeUI(testMode);
+}
+
+function toggleTestMode(on) {
+  const cfg = getCfg();
+  localStorage.setItem('ann-cfg', JSON.stringify(Object.assign({}, cfg, { testMode: on })));
+  applyTestModeUI(on);
+  toast(on ? '🧪 測試模式已開啟' : '✅ 已切換回正式模式');
+}
+
+function applyTestModeUI(on) {
+  const label = document.getElementById('test-mode-label');
+  const track = document.getElementById('test-mode-track');
+  const thumb = document.getElementById('test-mode-thumb');
+  if (label) label.textContent = on ? '開啟' : '關閉';
+  if (label) label.style.color = on ? '#f59e0b' : '#888';
+  if (track) track.style.background = on ? '#f59e0b' : '#e5e7eb';
+  if (thumb) thumb.style.left = on ? '22px' : '2px';
 }
 
 // ── 公告類型設定 ──────────────────────────────────────────────
 
-function saveTypes(types) {
+function saveTypes(types, mode) {
   const cfg = getCfg();
-  localStorage.setItem('ann-cfg', JSON.stringify(Object.assign({}, cfg, { announcementTypes: types })));
+  const key = mode === 'test' ? 'testAnnouncementTypes' : 'announcementTypes';
+  localStorage.setItem('ann-cfg', JSON.stringify(Object.assign({}, cfg, { [key]: types })));
 }
 
-function getTypes() {
-  return getCfg().announcementTypes || [];
+function getTypes(mode) {
+  const key = mode === 'test' ? 'testAnnouncementTypes' : 'announcementTypes';
+  return getCfg()[key] || [];
 }
 
-function renderAnnouncementTypes(types) {
-  const el = document.getElementById('cfg-announcement-types');
+function renderAnnouncementTypes(types, mode) {
+  const elId = mode === 'test' ? 'cfg-test-announcement-types' : 'cfg-announcement-types';
+  const el = document.getElementById(elId);
+  if (!el) return;
   if (!types.length) {
     el.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:8px 0;">尚無類型，點右上角「新增類型」</div>';
     return;
@@ -928,26 +992,19 @@ function renderAnnouncementTypes(types) {
 
   el.innerHTML = types.map((t, ti) => {
     const hasAll = t.langs.some(l => l.lang === 'all');
-    const hasSpecific = t.langs.some(l => l.lang !== 'all');
     const usedLangs = t.langs.map(l => l.lang);
     const canAddLang = !hasAll && usedLangs.length < 4;
 
     const langRows = t.langs.map((l, li) => {
-      // 語系下拉可選範圍：
-      // - 自己本身一定可選
-      // - 未被其他列使用的選項
-      // - 若已有具體語系（TW/JP/EN），不能選「全部」
-      // - 若已有「全部」，不能選具體語系
-      // 其他列（排除自己）的語系
       const otherLangs = t.langs.filter((_, idx) => idx !== li).map(x => x.lang);
       const otherHasSpecific = otherLangs.some(v => v !== 'all');
       const otherHasAll = otherLangs.includes('all');
 
       const availOpts = LANG_OPTS.filter(v => {
-        if (v === l.lang) return true;                      // 自己本身一定可選
-        if (otherLangs.includes(v)) return false;           // 已被其他列用掉
-        if (v === 'all' && otherHasSpecific) return false;  // 其他列有具體語系，不能選全部
-        if (v !== 'all' && otherHasAll) return false;       // 其他列有全部，不能選具體語系
+        if (v === l.lang) return true;
+        if (otherLangs.includes(v)) return false;
+        if (v === 'all' && otherHasSpecific) return false;
+        if (v !== 'all' && otherHasAll) return false;
         return true;
       });
       const opts = availOpts.map(v =>
@@ -955,12 +1012,12 @@ function renderAnnouncementTypes(types) {
       ).join('');
       return `
 <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-  <select onchange="updateTypeLang(${ti},${li},'lang',this.value)"
+  <select onchange="updateTypeLang(${ti},${li},'lang',this.value,'${mode}')"
     style="flex:0 0 80px;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:0.85rem;outline:none;">${opts}</select>
   <input type="text" value="${escHtml(l.webhook)}" placeholder="https://discord.com/api/webhooks/..."
-    oninput="updateTypeLang(${ti},${li},'webhook',this.value)"
+    oninput="updateTypeLang(${ti},${li},'webhook',this.value,'${mode}')"
     style="flex:1;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.8rem;font-family:monospace;outline:none;">
-  <button onclick="removeLang(${ti},${li})" title="刪除此語系"
+  <button onclick="removeLang(${ti},${li},'${mode}')" title="刪除此語系"
     style="background:none;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:0.8rem;">✕</button>
 </div>`;
     }).join('');
@@ -969,10 +1026,10 @@ function renderAnnouncementTypes(types) {
 <div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
     <input type="text" value="${escHtml(t.name)}" placeholder="類型名稱（例：維護更新）"
-      oninput="updateTypeName(${ti},this.value)"
+      oninput="updateTypeName(${ti},this.value,'${mode}')"
       style="flex:1;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.9rem;font-weight:600;outline:none;">
-    ${canAddLang ? `<button onclick="addLang(${ti})" style="background:none;border:1px solid #6366f1;color:#6366f1;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.8rem;">＋ 語系</button>` : ''}
-    <button onclick="removeType(${ti})" title="刪除此類型"
+    ${canAddLang ? `<button onclick="addLang(${ti},'${mode}')" style="background:none;border:1px solid #6366f1;color:#6366f1;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.8rem;">＋ 語系</button>` : ''}
+    <button onclick="removeType(${ti},'${mode}')" title="刪除此類型"
       style="background:none;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.8rem;">✕ 刪除</button>
   </div>
   ${langRows}
@@ -980,36 +1037,35 @@ function renderAnnouncementTypes(types) {
   }).join('');
 }
 
-function updateTypeName(ti, val) {
-  const types = getTypes();
+function updateTypeName(ti, val, mode) {
+  const types = getTypes(mode);
   if (!types[ti]) return;
   types[ti].name = val;
-  saveTypes(types);
+  saveTypes(types, mode);
 }
 
-function updateTypeLang(ti, li, field, val) {
-  const types = getTypes();
+function updateTypeLang(ti, li, field, val, mode) {
+  const types = getTypes(mode);
   if (!types[ti] || !types[ti].langs[li]) return;
   types[ti].langs[li][field] = val;
-  saveTypes(types);
-  renderAnnouncementTypes(types); // 重繪以更新可用語系選項
+  saveTypes(types, mode);
+  renderAnnouncementTypes(types, mode);
 }
 
-function removeLang(ti, li) {
-  const types = getTypes();
+function removeLang(ti, li, mode) {
+  const types = getTypes(mode);
   if (!types[ti]) return;
   types[ti].langs.splice(li, 1);
-  saveTypes(types);
-  renderAnnouncementTypes(types);
+  saveTypes(types, mode);
+  renderAnnouncementTypes(types, mode);
 }
 
-function addLang(ti) {
-  const types = getTypes();
+function addLang(ti, mode) {
+  const types = getTypes(mode);
   if (!types[ti]) return;
   const usedLangs = types[ti].langs.map(l => l.lang);
   const hasSpecific = usedLangs.some(v => v !== 'all');
   const hasAll = usedLangs.includes('all');
-  // 已有具體語系不能加全部；已有全部不能加具體語系
   const candidates = ['TW', 'JP', 'EN', 'all'].filter(v => {
     if (usedLangs.includes(v)) return false;
     if (v === 'all' && hasSpecific) return false;
@@ -1019,22 +1075,22 @@ function addLang(ti) {
   const available = candidates[0];
   if (!available) return;
   types[ti].langs.push({ lang: available, webhook: '' });
-  saveTypes(types);
-  renderAnnouncementTypes(types);
+  saveTypes(types, mode);
+  renderAnnouncementTypes(types, mode);
 }
 
-function addAnnouncementType() {
-  const types = getTypes();
-  types.push({ name: '新類型', langs: [{ lang: 'all', webhook: '' }] });
-  saveTypes(types);
-  renderAnnouncementTypes(types);
+function addAnnouncementType(mode) {
+  const types = getTypes(mode);
+  types.push({ name: '新類型', langs: [{ lang: 'TW', webhook: '' }] });
+  saveTypes(types, mode);
+  renderAnnouncementTypes(types, mode);
 }
 
-function removeType(ti) {
-  const types = getTypes();
+function removeType(ti, mode) {
+  const types = getTypes(mode);
   types.splice(ti, 1);
-  saveTypes(types);
-  renderAnnouncementTypes(types);
+  saveTypes(types, mode);
+  renderAnnouncementTypes(types, mode);
 }
 
 function saveSettings() {
