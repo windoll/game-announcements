@@ -432,6 +432,7 @@ body {
 
 <div id="toast"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 // ── 預設設定（可在設定頁覆蓋，存於 localStorage）─────────────
 const DEFAULTS = {
@@ -1263,6 +1264,9 @@ async function _doGenerateErolabs(ann, maint) {
     },
   ];
 
+  const zip = new JSZip();
+
+  // 加入 4 個語系的 .doc
   for (const lang of langs) {
     const parts = [];
     parts.push(lang.docTitle);
@@ -1279,24 +1283,41 @@ async function _doGenerateErolabs(ann, maint) {
       parts.push(lang.content);
     }
     const fullText = parts.join('\n');
-
-    // 產生 RTF（Word 可直接開啟編輯）
     const rtf = textToRtf(fullText);
-    const blob = new Blob([rtf], { type: 'application/rtf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = lang.filename + '.doc';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    // 間隔避免瀏覽器攔截多個下載
-    await new Promise(r => setTimeout(r, 500));
+    zip.file(lang.filename + '.doc', rtf);
   }
 
-  toast('✅ 已產生 4 個語系的 Erolabs 公告（.doc）');
+  // 嘗試下載圖片，失敗則放圖片連結 txt
+  const imageUrl = ann.image && ann.image !== '...' ? ann.image : '';
+  if (imageUrl) {
+    try {
+      const imgRes = await fetch(imageUrl);
+      if (!imgRes.ok) throw new Error('fetch failed');
+      const imgBlob = await imgRes.blob();
+      const ext = imageUrl.split('?')[0].split('.').pop().toLowerCase() || 'jpg';
+      zip.file(`活動圖片.${ext}`, imgBlob);
+    } catch {
+      // CORS 或其他錯誤，改放連結 txt
+      zip.file('活動圖片連結.txt', imageUrl);
+    }
+  }
+
+  // zip 名稱：雀星_MMDD公告_Erolabs.zip
+  const [rawM, rawD] = normalized.split('/');
+  const mmdd = String(rawM).padStart(2,'0') + String(rawD).padStart(2,'0');
+  const zipName = `雀星_${mmdd}公告_Erolabs.zip`;
+
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = zipName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  toast(`✅ 已下載 ${zipName}`);
 }
 
 // 將純文字轉成 RTF 格式
