@@ -284,7 +284,13 @@ body {
         <button class="btn btn-outline btn-sm" onclick="loadSheet()">↻ 重新整理</button>
       </div>
 
-      <div id="list-area"><div class="loading">⏳ 正在讀取試算表...</div></div>
+      <div id="list-area">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;">
+          <div style="font-size:2.5rem;">📋</div>
+          <div style="font-size:1rem;color:#6b7280;">點擊下方按鈕載入公告資料</div>
+          <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="loadSheet()">📥 載入公告</button>
+        </div>
+      </div>
     </div>
 
     <!-- ③ 設定頁 -->
@@ -1125,6 +1131,7 @@ function saveSettings() {
 
 window.addEventListener('DOMContentLoaded', () => {
   checkPassword();
+  applyTestModeUI(!!getCfg().testMode);
 });
 </script>
 </body>
