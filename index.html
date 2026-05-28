@@ -419,6 +419,10 @@ const N8N_WEBHOOK_TEST    = 'https://charlie98783.app.n8n.cloud/webhook-test/sen
 function N8N_WEBHOOK() { return getCfg().testMode ? N8N_WEBHOOK_TEST : N8N_WEBHOOK_PROD; }
 
 // ── 從 localStorage 讀取設定 ──────────────────────────────────
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function getCfg() {
   try {
     const saved = JSON.parse(localStorage.getItem('ann-cfg') || '{}');
