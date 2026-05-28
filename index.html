@@ -310,8 +310,13 @@ body {
 
         <div class="field-label">Google Sheet GID（工作表 ID）</div>
         <input type="text" id="cfg-sheet-gid" placeholder="e.g. 1281351206"
+          style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.85rem;font-family:monospace;margin-bottom:14px;outline:none;">
+        <div style="font-size:0.75rem;color:#888;margin-top:-10px;margin-bottom:14px;">在試算表網址 ?gid= 後面的數字</div>
+
+        <div class="field-label">GitHub Personal Access Token</div>
+        <input type="password" id="cfg-github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
           style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.85rem;font-family:monospace;margin-bottom:0;outline:none;">
-        <div style="font-size:0.75rem;color:#888;margin-top:4px;">在試算表網址 ?gid= 後面的數字</div>
+        <div style="font-size:0.75rem;color:#888;margin-top:4px;">用於上傳圖片到 GitHub repo（windoll/game-announcements）</div>
       </div>
 
       <!-- 測試模式開關 -->
@@ -400,6 +405,20 @@ body {
   </div>
 </div>
 
+<!-- 圖片庫 Modal -->
+<div class="modal-bg" id="modal-img-library">
+  <div class="modal" style="max-width:600px;width:95%;">
+    <h3>📂 圖片庫</h3>
+    <div id="img-lib-tabs" style="display:flex;gap:8px;margin-bottom:14px;"></div>
+    <div id="img-lib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;max-height:360px;overflow-y:auto;"></div>
+    <div id="img-lib-empty" style="display:none;color:#bbb;text-align:center;padding:30px 0;">此分類尚無圖片</div>
+    <div id="img-lib-loading" style="color:#888;text-align:center;padding:20px 0;">載入中…</div>
+    <div class="modal-footer" style="margin-top:14px;">
+      <button class="btn btn-outline" onclick="closeImgLibrary()">取消</button>
+    </div>
+  </div>
+</div>
+
 <!-- 發送確認彈窗 -->
 <div class="modal-bg" id="modal-send">
   <div class="modal">
@@ -456,6 +475,7 @@ const DEFAULTS = {
   ],
   testAnnouncementTypes: [],
   testMode: false,
+  githubToken: '',
 };
 const PAGE_PASSWORD_HASH  = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
 const SECRET_TOKEN        = 'zx9k-Q7mP-4rNw-Hj2T';
@@ -743,7 +763,15 @@ function renderList() {
   <div class="ann-title">${a.titleTW || '（無標題）'}</div>
   ${cardDateWarn}
   ${langTags}
-  ${a.image && a.image !== '...' ? `<div style="margin-top:5px;font-size:0.75rem;" onclick="event.stopPropagation()"><a href="${a.image}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a></div>` : ''}
+  <div style="margin-top:5px;font-size:0.75rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;" onclick="event.stopPropagation()">
+    <span id="img-preview-${id}">${(_imgCache[a.date] || (a.image && a.image !== '...')) ? `<a href="${_imgCache[a.date] || a.image}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>` : '<span style="color:#bbb;">尚無圖片</span>'}</span>
+    <button onclick="openImgLibrary('${id}','${a.date}','${(a.type||'').replace(/'/g,'')}','${(a.date||'').replace(/\//g,'')}')" style="cursor:pointer;color:#6366f1;font-size:0.75rem;border:1px solid #6366f1;border-radius:6px;padding:2px 8px;background:white;white-space:nowrap;">📂 圖片庫</button>
+    <label style="cursor:pointer;color:#6366f1;font-size:0.75rem;border:1px solid #6366f1;border-radius:6px;padding:2px 8px;white-space:nowrap;">
+      ⬆ 上傳新圖
+      <input type="file" accept="image/*" style="display:none;" onchange="uploadImageToGitHub(event,'${id}','${a.date}','${(a.type||'').replace(/'/g,'')}','${(a.date||'').replace(/\//g,'')}')">
+    </label>
+    <span id="img-upload-status-${id}" style="color:#888;font-size:0.72rem;"></span>
+  </div>
   ${contentHtml}
   ${!isDraft && st !== 'past' ? `
   <div class="ann-actions" onclick="event.stopPropagation()">
@@ -1048,9 +1076,10 @@ function toast(msg) {
 
 function loadSettings() {
   const cfg = getCfg();
-  document.getElementById('cfg-project-name').value = cfg.projectName || '';
-  document.getElementById('cfg-sheet-id').value     = cfg.sheetId    || '';
-  document.getElementById('cfg-sheet-gid').value    = cfg.sheetGid   || '';
+  document.getElementById('cfg-project-name').value  = cfg.projectName  || '';
+  document.getElementById('cfg-sheet-id').value      = cfg.sheetId      || '';
+  document.getElementById('cfg-sheet-gid').value     = cfg.sheetGid     || '';
+  document.getElementById('cfg-github-token').value  = cfg.githubToken  || '';
   renderAnnouncementTypes(cfg.announcementTypes || [], 'prod');
   renderAnnouncementTypes(cfg.testAnnouncementTypes || [], 'test');
   const testMode = !!cfg.testMode;
@@ -1354,8 +1383,9 @@ async function _doGenerateErolabs(ann, maint) {
     zip.file(lang.filename + '.doc', rtf);
   }
 
-  // 嘗試下載圖片，失敗則放圖片連結 txt
-  const imageUrl = ann.image && ann.image !== '...' ? ann.image : '';
+  // 優先用已上傳到 GitHub 的圖片，其次用 Sheet 圖片連結
+  const githubUrl = _imgCache[ann.date] || '';
+  const imageUrl = githubUrl || (ann.image && ann.image !== '...' ? ann.image : '');
   if (imageUrl) {
     try {
       const imgRes = await fetch(imageUrl);
@@ -1364,7 +1394,6 @@ async function _doGenerateErolabs(ann, maint) {
       const ext = imageUrl.split('?')[0].split('.').pop().toLowerCase() || 'jpg';
       zip.file(`活動圖片.${ext}`, imgBlob);
     } catch {
-      // CORS 或其他錯誤，改放連結 txt
       zip.file('活動圖片連結.txt', imageUrl);
     }
   }
@@ -1437,12 +1466,187 @@ ${rtfLines}
 }`;
 }
 
+// ── GitHub 圖片上傳 ───────────────────────────────────────────
+const GITHUB_REPO  = 'windoll/game-announcements';
+const GITHUB_BRANCH = 'main';
+
+// 本地快取：ann date → 已上傳的 GitHub raw URL
+const _imgCache = JSON.parse(localStorage.getItem('ann-img-cache') || '{}');
+
+function _saveImgCache() {
+  localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
+}
+
+// 判斷公告類型對應的 GitHub 圖片資料夾
+function _imgFolder(annType, mmdd) {
+  if (annType.includes('維護')) return 'images/維護';
+  return `images/活動/${mmdd}`;
+}
+
+// 上傳圖片到 GitHub
+async function _githubPut(token, path, base64) {
+  let sha = null;
+  try {
+    const check = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
+    });
+    if (check.ok) sha = (await check.json()).sha;
+  } catch {}
+
+  const body = { message: `Upload ${path}`, content: base64, branch: GITHUB_BRANCH };
+  if (sha) body.sha = sha;
+
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+    method: 'PUT',
+    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) { const e = await res.json(); throw new Error(e.message || res.status); }
+  return `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${path}`;
+}
+
+// 列出 GitHub 資料夾內的圖片
+async function _githubListImages(token, folder) {
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${folder}`, {
+    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
+  });
+  if (!res.ok) return [];
+  const items = await res.json();
+  return items.filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name))
+    .map(f => ({ name: f.name, url: `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${folder}/${f.name}` }));
+}
+
+// ── 上傳新圖 ─────────────────────────────────────────────────
+async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+
+  const token = getCfg().githubToken;
+  if (!token) { alert('請先在設定頁填入 GitHub Token'); return; }
+
+  const statusEl = document.getElementById('img-upload-status-' + cardId);
+  statusEl.textContent = '上傳中…';
+
+  const folder = _imgFolder(annType, mmdd);
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${folder}/${safeName}`;
+
+  const base64 = await new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = e => res(e.target.result.split(',')[1]);
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+
+  try {
+    const rawUrl = await _githubPut(token, path, base64);
+    _imgCache[annDate] = rawUrl;
+    _saveImgCache();
+    statusEl.textContent = '✅ 上傳成功';
+    _updateCardImgPreview(cardId, rawUrl);
+    toast('✅ 圖片已上傳');
+  } catch(e) {
+    statusEl.textContent = '❌ ' + e.message;
+  }
+}
+
+// 更新卡片圖片預覽
+function _updateCardImgPreview(cardId, url) {
+  const el = document.getElementById('img-preview-' + cardId);
+  if (el) el.innerHTML = `<a href="${url}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>`;
+}
+
+// ── 圖片庫 Modal ─────────────────────────────────────────────
+let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '';
+let _imgLibActiveFolder = '';
+
+async function openImgLibrary(cardId, annDate, annType, mmdd) {
+  _imgLibCardId = cardId;
+  _imgLibAnnDate = annDate;
+  _imgLibAnnType = annType;
+  _imgLibMmdd = mmdd;
+
+  document.getElementById('modal-img-library').classList.add('open');
+
+  const isMaint = annType.includes('維護');
+  // 維護類只有一個資料夾；活動類有「活動/MMDD」和「維護」兩個可選（活動不一定要維護圖）
+  const folders = isMaint
+    ? [{ label: '維護圖片', folder: 'images/維護' }]
+    : [{ label: `活動 ${annDate}`, folder: `images/活動/${mmdd}` }, { label: '維護圖片', folder: 'images/維護' }];
+
+  // 渲染 tab
+  const tabEl = document.getElementById('img-lib-tabs');
+  tabEl.innerHTML = folders.map((f, i) => `
+    <button onclick="switchImgLibTab(${i})" id="img-lib-tab-${i}"
+      style="padding:5px 14px;border-radius:8px;border:1px solid #e5e7eb;cursor:pointer;font-size:0.85rem;background:${i===0?'#6366f1':'white'};color:${i===0?'white':'#374151'};">
+      ${f.label}
+    </button>`).join('');
+
+  window._imgLibFolders = folders;
+  switchImgLibTab(0);
+}
+
+async function switchImgLibTab(idx) {
+  window._imgLibFolders.forEach((_, i) => {
+    const btn = document.getElementById('img-lib-tab-' + i);
+    if (!btn) return;
+    btn.style.background = i === idx ? '#6366f1' : 'white';
+    btn.style.color = i === idx ? 'white' : '#374151';
+  });
+
+  const folder = window._imgLibFolders[idx].folder;
+  _imgLibActiveFolder = folder;
+
+  const grid = document.getElementById('img-lib-grid');
+  const empty = document.getElementById('img-lib-empty');
+  const loading = document.getElementById('img-lib-loading');
+
+  grid.style.display = 'none';
+  empty.style.display = 'none';
+  loading.style.display = 'block';
+
+  const token = getCfg().githubToken;
+  if (!token) { loading.textContent = '請先在設定頁填入 GitHub Token'; return; }
+
+  const imgs = await _githubListImages(token, folder);
+  loading.style.display = 'none';
+
+  if (!imgs.length) {
+    empty.style.display = 'block';
+    grid.style.display = 'none';
+    return;
+  }
+
+  grid.style.display = 'grid';
+  grid.innerHTML = imgs.map(img => `
+    <div onclick="selectImgFromLibrary('${img.url}')"
+      style="cursor:pointer;border:2px solid #e5e7eb;border-radius:8px;overflow:hidden;transition:border-color 0.15s;"
+      onmouseover="this.style.borderColor='#6366f1'" onmouseout="this.style.borderColor='#e5e7eb'">
+      <img src="${img.url}" style="width:100%;height:90px;object-fit:cover;display:block;">
+      <div style="font-size:0.68rem;color:#666;padding:3px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${img.name}">${img.name}</div>
+    </div>`).join('');
+}
+
+function selectImgFromLibrary(url) {
+  _imgCache[_imgLibAnnDate] = url;
+  _saveImgCache();
+  _updateCardImgPreview(_imgLibCardId, url);
+  closeImgLibrary();
+  toast('✅ 已套用圖片');
+}
+
+function closeImgLibrary() {
+  document.getElementById('modal-img-library').classList.remove('open');
+}
+
 function saveSettings() {
   const cfg = getCfg();
   const updated = Object.assign({}, cfg, {
-    projectName: document.getElementById('cfg-project-name').value.trim(),
-    sheetId:     document.getElementById('cfg-sheet-id').value.trim(),
-    sheetGid:    document.getElementById('cfg-sheet-gid').value.trim(),
+    projectName:  document.getElementById('cfg-project-name').value.trim(),
+    sheetId:      document.getElementById('cfg-sheet-id').value.trim(),
+    sheetGid:     document.getElementById('cfg-sheet-gid').value.trim(),
+    githubToken:  document.getElementById('cfg-github-token').value.trim(),
   });
   localStorage.setItem('ann-cfg', JSON.stringify(updated));
   document.querySelector('.sidebar .project-name') &&
