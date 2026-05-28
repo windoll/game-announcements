@@ -1039,7 +1039,7 @@ async function confirmSend() {
       date:     dateVal,
       sendTime: timeVal,
       type:     pendingAnn.type || '',
-      image:    _imgCache[pendingAnn.date] || pendingAnn.image || '',
+      image:    _imgCache[pendingAnn.date] || '',
       messages,
     };
 
@@ -1384,8 +1384,7 @@ async function _doGenerateErolabs(ann, maint) {
   }
 
   // 優先用已上傳到 GitHub 的圖片，其次用 Sheet 圖片連結
-  const githubUrl = _imgCache[ann.date] || '';
-  const imageUrl = githubUrl || (ann.image && ann.image !== '...' ? ann.image : '');
+  const imageUrl = _imgCache[ann.date] || '';
   if (imageUrl) {
     try {
       const imgRes = await fetch(imageUrl);
