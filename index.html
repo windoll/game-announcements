@@ -1039,7 +1039,7 @@ async function confirmSend() {
       date:     dateVal,
       sendTime: timeVal,
       type:     pendingAnn.type || '',
-      image:    pendingAnn.image || '',
+      image:    _imgCache[pendingAnn.date] || pendingAnn.image || '',
       messages,
     };
 
