@@ -33,7 +33,6 @@
 
   <!-- 主內容 -->
   <main class="main">
-    <div id="sync-status" class="sync-status sync-clean" style="display:none;" onclick="syncStatusClick()"></div>
 
     <!-- ① 公告列表 -->
     <div id="page-list" class="page active">
@@ -183,6 +182,7 @@
     <div id="img-lib-loading" class="img-lib-loading">載入中…</div>
     <div class="modal-footer modal-footer-sm">
       <button class="btn btn-outline" onclick="closeImgLibrary()">完成</button>
+      <button class="btn btn-primary" id="btn-img-upload" onclick="uploadImgCache()">⬆ 上傳到 GitHub</button>
     </div>
   </div>
 </div>
@@ -301,7 +301,6 @@ async function checkPassword() {
 
 function initApp() {
   applyTestModeUI(!!getCfg().testMode);
-  if (!_imgCacheIsValid()) _loadImgCacheFromGitHub();
 }
 
 // ══ MODULE: STATE ════════════════════════════════════════════════
@@ -399,6 +398,7 @@ async function loadSheet() {
     document.getElementById('list-updated').textContent =
       `上次更新：${new Date().toLocaleString('zh-TW')}`;
     renderList();
+    _loadImgCacheFromGitHub();
   } catch (e) {
     document.getElementById('list-area').innerHTML =
       `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;color:#991b1b;font-size:0.85rem;">
@@ -1300,8 +1300,6 @@ const _imgCache = JSON.parse(localStorage.getItem('ann-img-cache') || '{}');
 
 function _saveImgCache() {
   localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
-  _imgCacheDirty = true;
-  _setSyncStatus('dirty');
 }
 
 // 產生 imgCache key（日期 + 類型，避免同日期不同類型互相覆蓋）
@@ -1333,80 +1331,80 @@ function _setImgUrl(annDate, lang, url, annType) {
   }
 }
 
-function _imgCacheIsValid() {
-  const ts = localStorage.getItem('ann-img-cache-ts');
-  if (!ts) return false;
-  const saved = new Date(parseInt(ts, 10));
-  const now   = new Date();
-  return saved.getFullYear() === now.getFullYear() &&
-         saved.getMonth()    === now.getMonth()    &&
-         saved.getDate()     === now.getDate();
-}
-
-function _markImgCacheFetched() {
-  localStorage.setItem('ann-img-cache-ts', Date.now().toString());
-}
-
-function _setSyncStatus(state) {
-  const el = document.getElementById('sync-status');
-  if (!el) return;
-  el.className = 'sync-status sync-' + state;
-  el.style.display = '';
-  const labels = { dirty: '未同步', clean: '已同步', error: '同步失敗，點此重試', ing: '同步中…' };
-  el.textContent = labels[state] || '';
-  if (state === 'clean') setTimeout(() => { if (el.className.includes('clean')) el.style.display = 'none'; }, 3000);
-}
-
-function syncStatusClick() {
-  if (_imgCacheDirty) _syncImgCacheToGitHub();
-}
-
-let _isSyncingImgCache = false;
-async function _syncImgCacheToGitHub() {
-  if (_isSyncingImgCache) return false;
-  _isSyncingImgCache = true;
-  _setSyncStatus('ing');
-  const token = getCfg().githubToken;
-  if (!token) { _isSyncingImgCache = false; _setSyncStatus('error'); return false; }
-  try {
-    const jsonStr = JSON.stringify(_imgCache, null, 2);
-    const content = btoa(encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
-    await _githubPut(token, 'images/index.json', content);
-    _imgCacheDirty = false;
-    _setSyncStatus('clean');
-    return true;
-  } catch (e) {
-    console.warn('同步 index.json 失敗', e);
-    _setSyncStatus('error');
-    return false;
-  } finally {
-    _isSyncingImgCache = false;
-  }
-}
-
 async function _loadImgCacheFromGitHub() {
-  // 本地有未同步的變動，先推送，再拉最新
-  if (_imgCacheDirty) await _syncImgCacheToGitHub();
+  const token = getCfg().githubToken;
+  if (!token) return;
   try {
-    const token = getCfg().githubToken;
-    const headers = token
-      ? { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
-      : {};
     const res = await fetch(
       `https://api.github.com/repos/${GITHUB_REPO}/contents/images/index.json`,
-      { headers }
+      { headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' } }
     );
     if (!res.ok) return;
     const file = await res.json();
-    const json = JSON.parse(atob(file.content.replace(/\n/g, '')));
-    // 直接以 GitHub 為主覆蓋，不做合併（合併會讓刪除操作失效）
+    const json = JSON.parse(decodeURIComponent(atob(file.content.replace(/\n/g, '')).split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2,'0')).join('')));
     Object.keys(_imgCache).forEach(k => delete _imgCache[k]);
     Object.assign(_imgCache, json);
     localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
-    _markImgCacheFetched();
     if (allData.length) renderList();
   } catch (e) {
     console.warn('載入 index.json 失敗', e);
+  }
+}
+
+let _isUploadingImgCache = false;
+async function uploadImgCache() {
+  if (_isUploadingImgCache) return;
+  const token = getCfg().githubToken;
+  if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
+
+  const btn = document.getElementById('btn-img-upload');
+  btn.disabled = true;
+  btn.textContent = '⬆ 上傳中…';
+  _isUploadingImgCache = true;
+
+  try {
+    const jsonStr = JSON.stringify(_imgCache, null, 2);
+    const content = btoa(encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+    const path = 'images/index.json';
+
+    // 先取得當前 sha
+    let sha = null;
+    try {
+      const check = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
+      });
+      if (check.ok) sha = (await check.json()).sha;
+    } catch {}
+
+    const body = { message: 'update images/index.json', content, branch: GITHUB_BRANCH };
+    if (sha) body.sha = sha;
+
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+      method: 'PUT',
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (res.ok) {
+      btn.textContent = '✅ 已上傳';
+      toast('✅ 圖片設定已上傳到 GitHub');
+    } else {
+      const err = await res.json();
+      throw new Error(err.message || res.status);
+    }
+  } catch (e) {
+    btn.textContent = '❌ 上傳失敗，點此重試';
+    btn.disabled = false;
+    toast('❌ 上傳失敗：' + e.message);
+  } finally {
+    _isUploadingImgCache = false;
+    // 3 秒後恢復按鈕
+    setTimeout(() => {
+      if (btn.textContent !== '❌ 上傳失敗，點此重試') {
+        btn.textContent = '⬆ 上傳到 GitHub';
+        btn.disabled = false;
+      }
+    }, 3000);
   }
 }
 
@@ -1458,7 +1456,6 @@ let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibLang = 
 let _imgLibCurrentFolder = 'images';
 let _isLoadingImgLib = false;
 let _imgLibDirMemory = {}; // annDate_annType → 上次瀏覽的資料夾
-let _imgCacheDirty = false; // 全域：任何圖片變動尚未同步
 
 function _imgLibMemKey() { return `${_imgLibAnnDate}_${_imgLibAnnType}`; }
 
@@ -1581,12 +1578,6 @@ function closeImgLibrary() {
 
 // ══ MODULE: INIT ═════════════════════════════════════════════════
 
-window.addEventListener('visibilitychange', () => {
-  // 頁面隱藏（切換分頁、關閉）時同步，比 beforeunload 更可靠
-  if (document.visibilityState === 'hidden' && _imgCacheDirty) {
-    _syncImgCacheToGitHub();
-  }
-});
 
 window.addEventListener('DOMContentLoaded', () => {
   if (sessionStorage.getItem('unlocked') === '1') {
@@ -1606,7 +1597,7 @@ Object.assign(window, {
   markCfgUnsaved, addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
   openImgLibrary, _imgLibLoadFolder, switchImgLangTab, selectImgFromLibrary, closeImgLibrary,
-  deleteSchedule, clearAnnImg, syncStatusClick,
+  deleteSchedule, clearAnnImg, uploadImgCache,
 });
 
 })();
