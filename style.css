@@ -359,6 +359,13 @@ body {
   transition: border-color 0.15s;
 }
 .img-lib-thumb:hover { border-color: #6366f1; }
+.img-thumb-del {
+  position: absolute; top: 3px; right: 3px;
+  background: rgba(0,0,0,0.55); color: white; border: none; border-radius: 50%;
+  width: 18px; height: 18px; font-size: 0.65rem; line-height: 18px; text-align: center;
+  cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+}
+.img-thumb-del:hover { background: #ef4444; }
 .img-lib-thumb img { width: 100%; height: 90px; object-fit: cover; display: block; }
 .img-lib-name {
   font-size: 0.68rem; color: #666; padding: 3px 5px;

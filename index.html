@@ -1446,7 +1446,56 @@ async function _githubListImages(token, folder) {
   if (!res.ok) return [];
   const items = await res.json();
   return items.filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name))
-    .map(f => ({ name: f.name, url: `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${folder}/${f.name}` }));
+    .map(f => ({ name: f.name, sha: f.sha, url: `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${folder}/${f.name}` }));
+}
+
+async function _githubDelete(token, path, sha) {
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: `Delete ${path}`, sha, branch: GITHUB_BRANCH })
+  });
+  if (!res.ok) { const e = await res.json(); throw new Error(e.message || res.status); }
+}
+
+async function deleteImgFromLibrary(folder, name, sha, url) {
+  const token = getCfg().githubToken;
+  if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
+  try {
+    await _githubDelete(token, `${folder}/${name}`, sha);
+    // 清掉所有語系 cache 中有套用此圖的項目
+    const rawUrl = url.split('?')[0];
+    for (const key of Object.keys(_imgCache)) {
+      const entry = _imgCache[key];
+      if (typeof entry === 'string') {
+        if (entry.split('?')[0] === rawUrl) delete _imgCache[key];
+      } else if (entry && typeof entry === 'object') {
+        ['ALL','TW','CN','JP','EN'].forEach(l => {
+          if (entry[l] && entry[l].split('?')[0] === rawUrl) delete entry[l];
+        });
+      }
+    }
+    _saveImgCache();
+    _syncImgCacheToGitHub();
+    // 從 recentUploads 也移除
+    if (_recentUploads[folder]) {
+      _recentUploads[folder] = _recentUploads[folder].filter(r => r.name !== name);
+    }
+    // 移除 grid 縮圖
+    const thumb = document.getElementById('img-thumb-' + CSS.escape(name));
+    if (thumb) thumb.remove();
+    // 若 grid 空了顯示 empty
+    const grid = document.getElementById('img-lib-grid');
+    if (grid && !grid.children.length) {
+      grid.style.display = 'none';
+      const empty = document.getElementById('img-lib-empty');
+      if (empty) empty.style.display = 'block';
+    }
+    renderList();
+    toast('🗑 已刪除圖片');
+  } catch (e) {
+    toast('❌ 刪除失敗：' + e.message);
+  }
 }
 
 async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
@@ -1604,10 +1653,13 @@ async function switchImgLibTab(idx) {
       const safeName = escHtml(img.name);
       // 比對 URL（去掉 query string 後比對）
       const isActive = currentImg && safeUrl.split('?')[0] === escUrl(currentImg).split('?')[0];
+      const safeSha  = escHtml(img.sha || '');
+      const safeFolder = escHtml(folder);
       return `
-      <div class="img-lib-thumb${isActive ? ' selected' : ''}" onclick="selectImgFromLibrary('${safeUrl}','${safeName}')">
+      <div class="img-lib-thumb${isActive ? ' selected' : ''}" id="img-thumb-${escHtml(img.name)}" onclick="selectImgFromLibrary('${safeUrl}','${safeName}')">
         <img src="${safeUrl}" loading="lazy">
         <div class="img-lib-name" title="${safeName}">${safeName}</div>
+        <button class="img-thumb-del" title="刪除" onclick="event.stopPropagation();deleteImgFromLibrary('${safeFolder}','${safeName}','${safeSha}','${safeUrl}')">✕</button>
       </div>`;
     }).join('');
 
@@ -1795,7 +1847,7 @@ Object.assign(window, {
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
   openImgLibrary, switchImgLibTab, switchImgLangTab, selectImgFromLibrary, applySelectedImg,
   previewUploadFile, clearUploadPreview, confirmUploadImg, closeImgLibrary,
-  syncImgCache, deleteSchedule,
+  syncImgCache, deleteSchedule, deleteImgFromLibrary,
 });
 
 })();
