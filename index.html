@@ -1437,6 +1437,7 @@ async function clearAnnImg(annDate, annType, lang) {
   }
   _saveImgCache();
   renderList();
+  _syncImgCacheToGitHub();
 }
 
 async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
