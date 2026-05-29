@@ -176,31 +176,13 @@
 <!-- 圖片庫 Modal -->
 <div class="modal-bg" id="modal-img-library">
   <div class="modal modal-img">
-    <h3>📂 管理圖片</h3>
-    <div id="img-lib-tabs" class="img-lib-tabs"></div>
+    <h3>🖼 選擇圖片</h3>
     <div id="img-lib-lang-tabs" class="img-lib-lang-tabs" style="display:none;"></div>
     <div id="img-lib-grid" class="img-lib-grid"></div>
-    <div id="img-lib-empty" class="img-lib-empty" style="display:none;">此分類尚無圖片</div>
+    <div id="img-lib-empty" class="img-lib-empty" style="display:none;">此資料夾沒有圖片</div>
     <div id="img-lib-loading" class="img-lib-loading">載入中…</div>
-    <!-- 上傳區塊 -->
-    <div class="img-lib-upload-area" id="img-lib-upload-area" style="display:none;">
-      <div class="img-lib-upload-preview" id="img-lib-upload-preview" style="display:none;">
-        <img id="img-lib-upload-preview-img" src="">
-        <div class="img-lib-upload-preview-info">
-          <input id="img-lib-upload-filename" class="img-lib-upload-filename cfg-input" type="text" placeholder="檔名">
-          <div id="img-lib-upload-preview-size" class="img-lib-upload-preview-size"></div>
-        </div>
-        <button class="img-lib-upload-clear" onclick="clearUploadPreview()" title="取消選取">✕</button>
-      </div>
-      <label id="img-lib-upload-label" class="img-lib-upload-label">
-        ⬆ 選擇圖片上傳
-        <input type="file" accept="image/*" style="display:none;" id="img-lib-upload-input" onchange="previewUploadFile(event)">
-      </label>
-      <div id="img-lib-upload-status" class="img-lib-upload-status"></div>
-    </div>
     <div class="modal-footer modal-footer-sm">
-      <button class="btn btn-outline btn-sm" id="btn-img-lib-upload" onclick="confirmUploadImg()" style="display:none;" disabled>⬆ 確認上傳</button>
-      <button class="btn btn-primary" onclick="closeImgLibrary()">完成</button>
+      <button class="btn btn-outline" onclick="closeImgLibrary()">完成</button>
     </div>
   </div>
 </div>
@@ -856,6 +838,8 @@ async function confirmSend() {
   const hourVal = document.getElementById('modal-time-h').value;
   const minVal  = document.getElementById('modal-time-m').value;
   if (!dateVal || !hourVal || !minVal) { toast('⚠️ 請選擇發送日期與時間'); return; }
+  // 發送前同步圖片 cache
+  _syncImgCacheToGitHub();
   const timeVal = hourVal + ':' + minVal;
 
   const [mm, dd] = dateVal.split('/').map(Number);
@@ -1327,6 +1311,7 @@ const _imgCache = JSON.parse(localStorage.getItem('ann-img-cache') || '{}');
 
 function _saveImgCache() {
   localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
+  _imgCacheDirty = true;
 }
 
 // 產生 imgCache key（日期 + 類型，避免同日期不同類型互相覆蓋）
@@ -1378,6 +1363,7 @@ async function _syncImgCacheToGitHub() {
   try {
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(_imgCache, null, 2))));
     await _githubPut(token, 'images/index.json', content);
+    _imgCacheDirty = false;
     return true;
   } catch (e) {
     console.warn('同步 index.json 失敗', e);
@@ -1451,8 +1437,6 @@ async function clearAnnImg(annDate, annType, lang) {
   }
   _saveImgCache();
   renderList();
-  // 背景同步，不等待
-  _syncImgCacheToGitHub();
 }
 
 async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
@@ -1507,9 +1491,9 @@ function _updateCardImgPreview(cardId, url) {
 let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibLang = 'TW';
 let _imgLibCurrentFolder = 'images';
 let _isLoadingImgLib = false;
-let _uploadFile = null;
 let _imgLibDirMemory = {}; // annDate_annType → 上次瀏覽的資料夾
-let _imgLibDirty = false;  // 是否有套用尚未同步
+let _imgLibDirty = false;   // 圖片庫內是否有套用尚未同步
+let _imgCacheDirty = false; // 全域：任何圖片變動尚未同步
 
 function _imgLibMemKey() { return `${_imgLibAnnDate}_${_imgLibAnnType}`; }
 
@@ -1526,21 +1510,15 @@ function _imgLibRenderLangTabs() {
 }
 
 async function openImgLibrary(cardId, annDate, annType, mmdd, lang) {
-  _imgLibCardId      = cardId;
-  _imgLibAnnDate     = annDate;
-  _imgLibAnnType     = annType;
-  _imgLibLang  = (lang && lang !== 'ALL') ? lang : 'TW';
-  _imgLibDirty = false;
-
-  // 記住上次瀏覽位置，沒有就從根目錄開始
+  _imgLibCardId        = cardId;
+  _imgLibAnnDate       = annDate;
+  _imgLibAnnType       = annType;
+  _imgLibLang          = (lang && lang !== 'ALL') ? lang : 'TW';
+  _imgLibDirty         = false;
   _imgLibCurrentFolder = _imgLibDirMemory[_imgLibMemKey()] || 'images';
-  _imgLibDirty = false;
 
   document.getElementById('modal-img-library').classList.add('open');
-  document.getElementById('img-lib-upload-area').style.display = 'block';
-
   _imgLibRenderLangTabs();
-  clearUploadPreview();
   await _imgLibLoadFolder(_imgLibCurrentFolder);
 }
 
@@ -1633,107 +1611,7 @@ function selectImgFromLibrary(url, name) {
   toast(`✅ 已套用到 ${_imgLibLang}`);
 }
 
-// 選檔後顯示預覽，不立即上傳
-function previewUploadFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  _uploadFile = file;
-
-  const previewWrap = document.getElementById('img-lib-upload-preview');
-  const previewImg  = document.getElementById('img-lib-upload-preview-img');
-  const previewSize = document.getElementById('img-lib-upload-preview-size');
-  const uploadLabel = document.getElementById('img-lib-upload-label');
-  const uploadBtn   = document.getElementById('btn-img-lib-upload');
-
-  const reader = new FileReader();
-  reader.onload = e => { previewImg.src = e.target.result; };
-  reader.readAsDataURL(file);
-
-  document.getElementById('img-lib-upload-filename').value = file.name;
-  previewSize.textContent = (file.size / 1024).toFixed(1) + ' KB';
-  previewWrap.style.display = 'flex';
-  uploadLabel.style.display = 'none';
-  uploadBtn.style.display   = 'inline-flex';
-  uploadBtn.disabled        = false;
-  document.getElementById('img-lib-upload-status').textContent = '';
-}
-
-function clearUploadPreview() {
-  _uploadFile = null;
-  const previewWrap = document.getElementById('img-lib-upload-preview');
-  const uploadLabel = document.getElementById('img-lib-upload-label');
-  const uploadBtn   = document.getElementById('btn-img-lib-upload');
-  const input       = document.getElementById('img-lib-upload-input');
-  if (previewWrap) previewWrap.style.display = 'none';
-  if (uploadLabel) uploadLabel.style.display = 'inline-flex';
-  if (uploadBtn)   { uploadBtn.style.display = 'none'; uploadBtn.disabled = true; uploadBtn.textContent = '⬆ 確認上傳'; }
-  if (input)       input.value = '';
-  const fnInput = document.getElementById('img-lib-upload-filename');
-  if (fnInput) fnInput.value = '';
-  document.getElementById('img-lib-upload-status').textContent = '';
-}
-
-async function confirmUploadImg() {
-  if (!_uploadFile) return;
-  const token = getCfg().githubToken;
-  if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
-
-  const uploadBtn    = document.getElementById('btn-img-lib-upload');
-  const statusEl     = document.getElementById('img-lib-upload-status');
-  uploadBtn.disabled = true;
-  uploadBtn.textContent = '上傳中…';
-  statusEl.textContent  = '';
-
-  const inputName = document.getElementById('img-lib-upload-filename').value.trim() || _uploadFile.name;
-  const safeName  = inputName.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path     = `${_imgLibCurrentFolder}/${safeName}`;
-
-  const base64 = await new Promise((res, rej) => {
-    const reader = new FileReader();
-    reader.onload = e => res(e.target.result.split(',')[1]);
-    reader.onerror = rej;
-    reader.readAsDataURL(_uploadFile);
-  });
-
-  try {
-    const rawUrl = await _githubPut(token, path, base64);
-    // 自動套用到當前語系
-    _setImgUrl(_imgLibAnnDate, _imgLibLang, rawUrl, _imgLibAnnType);
-    _saveImgCache();
-    _imgLibDirty = true;
-    statusEl.textContent = `✅ 上傳成功，已套用到 ${_imgLibLang}`;
-    // 用本地預覽圖插入縮圖，避免 GitHub CDN 延遲
-    const localPreviewSrc = document.getElementById('img-lib-upload-preview-img')?.src;
-    clearUploadPreview();
-    _imgLibRenderLangTabs();
-    const grid = document.getElementById('img-lib-grid');
-    let imgGrid = grid?.querySelector('.img-lib-img-grid');
-    if (!imgGrid) {
-      // 還沒有 img-grid，建一個
-      imgGrid = document.createElement('div');
-      imgGrid.className = 'img-lib-img-grid';
-      grid.appendChild(imgGrid);
-      grid.style.display = 'block';
-      document.getElementById('img-lib-empty').style.display = 'none';
-    }
-    const thumbName = escHtml(safeName);
-    const safeRawUrl = escUrl(rawUrl);
-    const newThumb = document.createElement('div');
-    newThumb.className = 'img-lib-thumb selected';
-    newThumb.innerHTML = `<img src="${localPreviewSrc || safeRawUrl}" loading="lazy"><div class="img-lib-name" title="${thumbName}">${thumbName}</div>`;
-    newThumb.onclick = () => selectImgFromLibrary(safeRawUrl, thumbName);
-    imgGrid.querySelectorAll('.img-lib-thumb').forEach(el => el.classList.remove('selected'));
-    imgGrid.prepend(newThumb);
-  } catch (e) {
-    statusEl.textContent  = '❌ 上傳失敗：' + e.message;
-    uploadBtn.disabled    = false;
-    uploadBtn.textContent = '⬆ 確認上傳';
-  }
-}
-
 async function closeImgLibrary() {
-  _uploadFile = null;
-  clearUploadPreview();
   document.getElementById('modal-img-library').classList.remove('open');
   renderList();
   if (_imgLibDirty) {
@@ -1756,6 +1634,10 @@ async function syncImgCache() {
 
 // ══ MODULE: INIT ═════════════════════════════════════════════════
 
+window.addEventListener('beforeunload', () => {
+  if (_imgCacheDirty) _syncImgCacheToGitHub();
+});
+
 window.addEventListener('DOMContentLoaded', () => {
   if (sessionStorage.getItem('unlocked') === '1') {
     document.getElementById('lock-screen').style.display = 'none';
@@ -1773,8 +1655,7 @@ Object.assign(window, {
   loadSettings, toggleTestMode, saveSettings, exportSettings, importSettings,
   markCfgUnsaved, addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
-  openImgLibrary, _imgLibLoadFolder, switchImgLangTab, selectImgFromLibrary,
-  previewUploadFile, clearUploadPreview, confirmUploadImg, closeImgLibrary,
+  openImgLibrary, _imgLibLoadFolder, switchImgLangTab, selectImgFromLibrary, closeImgLibrary,
   syncImgCache, deleteSchedule, clearAnnImg,
 });
 
