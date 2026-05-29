@@ -1,11 +1,6 @@
 {
   "6/10_維護預告": {},
-  "6/10_活動公告": {
-    "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/JP.png",
-    "EN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/CN.png"
-  },
+  "6/10_活動公告": {},
   "6/3_活動公告": {},
-  "6/3_維護預告": {
-    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_JP.jpg"
-  }
+  "6/3_維護預告": {}
 }
