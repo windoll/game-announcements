@@ -1944,23 +1944,6 @@ async function openImgLibrary(cardId, annDate, annType, mmdd, lang) {
     }
   }
 
-  // 語系 tab（活動公告才顯示）
-  const langTabEl = document.getElementById('img-lib-lang-tabs');
-  if (langTabEl) {
-    if (!isMaint) {
-      const langs = ['ALL', 'TW', 'CN', 'JP', 'EN'];
-      langTabEl.style.display = 'flex';
-      langTabEl.innerHTML = langs.map(l => `
-        <button onclick="switchImgLangTab('${l}')" id="img-lib-lang-${l}"
-          class="img-lib-lang-btn${l === _imgLibLang ? ' active' : ''}">
-          ${l === 'ALL' ? '全部' : l}
-        </button>`).join('');
-    } else {
-      langTabEl.style.display = 'none';
-      langTabEl.innerHTML = '';
-    }
-  }
-
   _imgLibFolders = folders;
   switchImgLibTab(0);
 }
