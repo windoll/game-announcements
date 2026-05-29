@@ -580,15 +580,20 @@ function renderList() {
       const bc = borderColor[st];
       const dateDisplay = a.date + (a.time ? ' ' + a.time : '');
 
-      const mkCheck = (code, val) => val
-        ? `<div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span><span class="lang-title-text">${escHtml(val)}</span></div>`
-        : `<div class="lang-row"><span class="lang-check lang-no">${code} ✗</span><span class="lang-title-text lang-empty">未填寫</span></div>`;
+      const mkCheck = (code, val, imgUrl) => {
+        const imgHtml = imgUrl
+          ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link" onclick="stopProp(event)">🖼</a>`
+          : '<span class="lang-img-empty">✗圖</span>';
+        return val
+          ? `<div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span>${imgHtml}<span class="lang-title-text">${escHtml(val)}</span></div>`
+          : `<div class="lang-row"><span class="lang-check lang-no">${code} ✗</span>${imgHtml}<span class="lang-title-text lang-empty">未填寫</span></div>`;
+      };
       const langTags =
         '<hr class="lang-divider">' +
-        mkCheck('TW', a.titleTW) +
-        mkCheck('CN', a.titleCN) +
-        mkCheck('JP', a.titleJP) +
-        mkCheck('EN', a.titleEN);
+        mkCheck('TW', a.titleTW, escUrl(_getImgUrl(a.date, 'TW', a.type))) +
+        mkCheck('CN', a.titleCN, escUrl(_getImgUrl(a.date, 'CN', a.type))) +
+        mkCheck('JP', a.titleJP, escUrl(_getImgUrl(a.date, 'JP', a.type))) +
+        mkCheck('EN', a.titleEN, escUrl(_getImgUrl(a.date, 'EN', a.type)));
 
       const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
 
@@ -616,16 +621,6 @@ function renderList() {
           '</div>';
       }
 
-      // 圖片區塊：標題前，依語系顯示（只有一張則共用）
-      const langs = ['TW', 'CN', 'JP', 'EN'];
-      const imgRows = langs.map(l => {
-        const url = escUrl(_getImgUrl(a.date, l, a.type));
-        const link = url
-          ? `<a href="${url}" target="_blank" rel="noopener noreferrer" class="lang-img-link">🖼 查看圖片</a>`
-          : '<span class="lang-img-empty">尚無圖片</span>';
-        return `<div class="ann-img-lang-row" onclick="stopProp(event)"><span class="ann-img-lang-code">${l}</span>${link}</div>`;
-      }).join('');
-      const imgBlockHtml = `<div class="ann-img-multi" onclick="stopProp(event)">${imgRows}</div>`;
 
       let cardDateWarn = '';
       if (a.type && a.type.includes('維護預告') && a.contentTW) {
@@ -653,7 +648,6 @@ function renderList() {
     ${isDraft ? '<span class="ann-draft-label">草稿</span>' : ''}
     ${!isDraft ? '<span class="expand-arrow">▼</span>' : ''}
   </div>
-  ${imgBlockHtml}
   <div class="ann-title">${escHtml(a.titleTW || '（無標題）')}</div>
   ${cardDateWarn}
   ${langTags}
@@ -1708,8 +1702,7 @@ async function confirmUploadImg() {
   const folderIdx = _currentTabIdx;
   const folder    = _imgLibFolders[folderIdx]?.folder || _imgFolder(_imgLibAnnType, _imgLibMmdd);
 
-  const ext      = _uploadFile.name.split('.').pop().replace(/[^a-zA-Z0-9]/g, '') || 'png';
-  const safeName = `${_imgLibMmdd}_${_imgLibLang}.${ext}`;
+  const safeName = _uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const path     = `${folder}/${safeName}`;
 
   const base64 = await new Promise((res, rej) => {
