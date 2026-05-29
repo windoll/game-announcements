@@ -1509,50 +1509,33 @@ function _updateCardImgPreview(cardId, url) {
 
 // ══ MODULE: IMAGE LIBRARY ════════════════════════════════════════
 
-let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '', _imgLibLang = 'TW';
-let _imgLibFolders    = [];
-let _currentTabIdx    = 0;
-let _isLoadingImgLib  = false;
+let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibLang = 'TW';
+let _imgLibCurrentFolder = 'images';
+let _isLoadingImgLib = false;
+let _imgLibSelectedUrl = '';
+let _uploadFile = null;
 
 async function openImgLibrary(cardId, annDate, annType, mmdd, lang) {
-  _imgLibCardId  = cardId;
-  _imgLibAnnDate = annDate;
-  _imgLibAnnType = annType;
-  _imgLibMmdd    = mmdd;
-  _imgLibLang    = (lang && lang !== 'ALL') ? lang : 'TW';
+  _imgLibCardId        = cardId;
+  _imgLibAnnDate       = annDate;
+  _imgLibAnnType       = annType;
+  _imgLibLang          = (lang && lang !== 'ALL') ? lang : 'TW';
+  _imgLibCurrentFolder = 'images';
+  _imgLibSelectedUrl   = '';
 
   document.getElementById('modal-img-library').classList.add('open');
 
-  // 顯示上傳區塊
-  const uploadArea = document.getElementById('img-lib-upload-area');
-  if (uploadArea) uploadArea.style.display = 'block';
-
-  const isMaint = annType.includes('維護');
-  const folders = isMaint
-    ? [{ label: '維護圖片', folder: 'images/維護' }]
-    : [{ label: `活動 ${mmdd}`, folder: `images/活動/${mmdd}` }];
-
-  // 語系 tab（活動公告才顯示）
   const langTabEl = document.getElementById('img-lib-lang-tabs');
   if (langTabEl) {
-    if (!isMaint) {
-      const langs = ['TW', 'CN', 'JP', 'EN'];
-      langTabEl.style.display = 'flex';
-      langTabEl.innerHTML = langs.map(l => `
-        <button onclick="switchImgLangTab('${l}')" id="img-lib-lang-${l}"
-          class="img-lib-lang-btn${l === _imgLibLang ? ' active' : ''}">
-          ${l}
-        </button>`).join('');
-    } else {
-      langTabEl.style.display = 'none';
-      langTabEl.innerHTML = '';
-    }
+    langTabEl.style.display = 'flex';
+    langTabEl.innerHTML = ['TW','CN','JP','EN'].map(l =>
+      `<button onclick="switchImgLangTab('${l}')" id="img-lib-lang-${l}"
+        class="img-lib-lang-btn${l === _imgLibLang ? ' active' : ''}">${l}</button>`
+    ).join('');
   }
 
-  _imgLibFolders = folders;
-  _currentTabIdx = 0;
-  document.getElementById('img-lib-grid').innerHTML = '';
-  switchImgLibTab(0);
+  clearUploadPreview();
+  await _imgLibLoadFolder('images');
 }
 
 function switchImgLangTab(lang) {
@@ -1571,76 +1554,76 @@ function switchImgLangTab(lang) {
   document.getElementById('btn-img-lib-apply').disabled = !_imgLibSelectedUrl;
 }
 
-async function switchImgLibTab(idx) {
+async function _imgLibLoadFolder(folder) {
   if (_isLoadingImgLib) return;
-  _isLoadingImgLib = true;
-  _currentTabIdx   = idx;
+  _isLoadingImgLib     = true;
+  _imgLibCurrentFolder = folder;
+  _imgLibSelectedUrl   = '';
 
-  _imgLibFolders.forEach((_, i) => {
-    const btn = document.getElementById('img-lib-tab-' + i);
-    if (!btn) return;
-    btn.style.background = i === idx ? '#6366f1' : 'white';
-    btn.style.color      = i === idx ? 'white'   : '#374151';
-  });
-
-  const folder  = _imgLibFolders[idx].folder;
-  const grid    = document.getElementById('img-lib-grid');
-  const empty   = document.getElementById('img-lib-empty');
-  const loading = document.getElementById('img-lib-loading');
+  const grid     = document.getElementById('img-lib-grid');
+  const empty    = document.getElementById('img-lib-empty');
+  const loading  = document.getElementById('img-lib-loading');
+  const applyBtn = document.getElementById('btn-img-lib-apply');
 
   grid.style.display    = 'none';
   empty.style.display   = 'none';
   loading.style.display = 'block';
   loading.textContent   = '載入中…';
+  if (applyBtn) applyBtn.disabled = true;
 
   const token = getCfg().githubToken;
   if (!token) { loading.textContent = '請先在設定頁填入 GitHub Token'; _isLoadingImgLib = false; return; }
 
   try {
-    let imgs = await _githubListImages(token, folder);
-    // 合併剛上傳但 API 還沒更新的圖片
-    const recent = _recentUploads[folder] || [];
-    recent.forEach(r => {
-      if (!imgs.find(img => img.name === r.name)) imgs = [r, ...imgs];
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${folder}`, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
     });
+    if (!res.ok) { loading.textContent = '載入失敗'; _isLoadingImgLib = false; return; }
+    const items = await res.json();
+
+    const dirs = items.filter(i => i.type === 'dir');
+    const imgs = items.filter(i => i.type === 'file' && /\.(png|jpg|jpeg|gif|webp)$/i.test(i.name));
+
     loading.style.display = 'none';
 
-    if (!imgs.length) {
-      empty.style.display = 'block';
-      return;
-    }
+    if (!dirs.length && !imgs.length) { empty.style.display = 'block'; _isLoadingImgLib = false; return; }
 
-    grid.style.display = 'grid';
     const currentImg = _getImgUrl(_imgLibAnnDate, _imgLibLang, _imgLibAnnType);
-    grid.innerHTML = imgs.map(img => {
-      const safeUrl  = escUrl(img.url);
+
+    const backHtml = folder !== 'images'
+      ? `<div class="img-lib-back" onclick="_imgLibLoadFolder('${folder.split('/').slice(0,-1).join('/')}')">← 返回上層</div>`
+      : '';
+    const dirHtml = dirs.length
+      ? `<div class="img-lib-dirs">${dirs.map(d => `<div class="img-lib-dir" onclick="_imgLibLoadFolder('${d.path}')">📁 ${escHtml(d.name)}</div>`).join('')}</div>`
+      : '';
+    const imgHtml = imgs.map(img => {
+      const url      = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${img.path}`;
+      const safeUrl  = escUrl(url);
       const safeName = escHtml(img.name);
-      // 比對 URL（去掉 query string 後比對）
       const isActive = currentImg && safeUrl.split('?')[0] === escUrl(currentImg).split('?')[0];
-      return `
-      <div class="img-lib-thumb${isActive ? ' selected' : ''}" onclick="selectImgFromLibrary('${safeUrl}','${safeName}')">
+      return `<div class="img-lib-thumb${isActive ? ' selected' : ''}" onclick="selectImgFromLibrary('${safeUrl}','${safeName}')">
         <img src="${safeUrl}" loading="lazy">
         <div class="img-lib-name" title="${safeName}">${safeName}</div>
       </div>`;
     }).join('');
 
-    // 如果有已套用的圖片，同步更新選取狀態
+    grid.style.display = 'block';
+    grid.innerHTML = `${backHtml}${dirHtml}<div class="img-lib-img-grid">${imgHtml}</div>`;
+
     if (currentImg) {
-      const activeUrl = escUrl(currentImg).split('?')[0];
-      const activeImg = imgs.find(img => escUrl(img.url).split('?')[0] === activeUrl);
-      if (activeImg) {
-        _imgLibSelectedUrl = escUrl(activeImg.url);
-        document.getElementById('btn-img-lib-apply').disabled = false;
-      }
+      const activeThumb = [...grid.querySelectorAll('.img-lib-thumb')].find(el => {
+        const img = el.querySelector('img');
+        return img && img.src.split('?')[0] === escUrl(currentImg).split('?')[0];
+      });
+      if (activeThumb) { _imgLibSelectedUrl = currentImg; if (applyBtn) applyBtn.disabled = false; }
     }
+  } catch(e) {
+    loading.style.display = 'block';
+    loading.textContent = '載入失敗：' + e.message;
   } finally {
     _isLoadingImgLib = false;
   }
 }
-
-let _imgLibSelectedUrl = '';
-let _uploadFile = null; // 待上傳的 File 物件
-const _recentUploads = {}; // folder → [{name, url}]，補 GitHub API 快取延遲
 
 function selectImgFromLibrary(url, name) {
   _imgLibSelectedUrl = url;
@@ -1718,11 +1701,8 @@ async function confirmUploadImg() {
   uploadBtn.textContent = '上傳中…';
   statusEl.textContent  = '';
 
-  const folderIdx = _currentTabIdx;
-  const folder    = _imgLibFolders[folderIdx]?.folder || _imgFolder(_imgLibAnnType, _imgLibMmdd);
-
   const safeName = _uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path     = `${folder}/${safeName}`;
+  const path     = `${_imgLibCurrentFolder}/${safeName}`;
 
   const base64 = await new Promise((res, rej) => {
     const reader = new FileReader();
@@ -1732,35 +1712,13 @@ async function confirmUploadImg() {
   });
 
   try {
-    const rawUrl = await _githubPut(token, path, base64);
-    _setImgUrl(_imgLibAnnDate, _imgLibLang, rawUrl, _imgLibAnnType);
-    _saveImgCache();
-    // 記錄到 recentUploads，避免 GitHub API 快取延遲導致重新開啟看不到
-    if (!_recentUploads[folder]) _recentUploads[folder] = [];
-    _recentUploads[folder] = _recentUploads[folder].filter(r => r.name !== safeName);
-    _recentUploads[folder].unshift({ name: safeName, url: rawUrl });
-    const synced = await _syncImgCacheToGitHub();
-    statusEl.textContent = '✅ 上傳成功，已自動套用';
-    // 直接把新圖插入 grid，不等 GitHub CDN 快取更新
-    const grid = document.getElementById('img-lib-grid');
-    const empty = document.getElementById('img-lib-empty');
-    if (grid) {
-      const safeUrl      = escUrl(rawUrl + '?t=' + Date.now());
-      const displayName  = escHtml(safeName);
-      const newThumb = document.createElement('div');
-      newThumb.className = 'img-lib-thumb selected';
-      newThumb.innerHTML = `<img src="${safeUrl}" loading="lazy"><div class="img-lib-name" title="${displayName}">${displayName}</div>`;
-      newThumb.onclick = () => selectImgFromLibrary(safeUrl, displayName);
-      grid.style.display = 'grid';
-      if (empty) empty.style.display = 'none';
-      grid.prepend(newThumb);
-    }
-    renderList();
+    await _githubPut(token, path, base64);
+    statusEl.textContent = '✅ 上傳成功';
     clearUploadPreview();
-    if (!synced) toast('⚠️ 上傳成功，但同步失敗，其他裝置可能看不到');
+    await _imgLibLoadFolder(_imgLibCurrentFolder);
   } catch (e) {
-    statusEl.textContent = '❌ 上傳失敗：' + e.message;
-    uploadBtn.disabled   = false;
+    statusEl.textContent  = '❌ 上傳失敗：' + e.message;
+    uploadBtn.disabled    = false;
     uploadBtn.textContent = '⬆ 確認上傳';
   }
 }
@@ -1806,7 +1764,7 @@ Object.assign(window, {
   loadSettings, toggleTestMode, saveSettings, exportSettings, importSettings,
   markCfgUnsaved, addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
-  openImgLibrary, switchImgLibTab, switchImgLangTab, selectImgFromLibrary, applySelectedImg,
+  openImgLibrary, _imgLibLoadFolder, switchImgLangTab, selectImgFromLibrary, applySelectedImg,
   previewUploadFile, clearUploadPreview, confirmUploadImg, closeImgLibrary,
   syncImgCache, deleteSchedule, clearAnnImg,
 });

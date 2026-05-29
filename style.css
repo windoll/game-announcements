@@ -348,10 +348,16 @@ body {
 
 /* ── 圖片庫 ── */
 .img-lib-tabs { display: flex; gap: 8px; margin-bottom: 8px; }
-.img-lib-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 10px; max-height: 360px; overflow-y: auto;
+.img-lib-grid { max-height: 360px; overflow-y: auto; }
+.img-lib-back { cursor: pointer; color: #6366f1; font-size: 0.85rem; margin-bottom: 8px; display: inline-block; }
+.img-lib-back:hover { text-decoration: underline; }
+.img-lib-dirs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.img-lib-dir {
+  cursor: pointer; background: #f3f4f6; border: 1px solid #e5e7eb;
+  border-radius: 8px; padding: 6px 12px; font-size: 0.83rem; color: #374151;
 }
+.img-lib-dir:hover { background: #e0e7ff; border-color: #6366f1; color: #6366f1; }
+.img-lib-img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
 .img-lib-empty { color: #bbb; text-align: center; padding: 30px 0; }
 .img-lib-loading { color: #888; text-align: center; padding: 20px 0; }
 .img-lib-thumb {
