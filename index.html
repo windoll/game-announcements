@@ -616,31 +616,16 @@ function renderList() {
           '</div>';
       }
 
-      // 圖片區塊：標題前，依語系顯示
-      const _ck = _imgCacheKey(a.date, a.type);
-      const imgEntry = _imgCache[_ck] || _imgCache[a.date]; // 相容舊 key
+      // 圖片區塊：標題前，依語系顯示（只有一張則共用）
       const langs = ['TW', 'CN', 'JP', 'EN'];
-      const hasMultiLang = imgEntry && typeof imgEntry === 'object' &&
-        langs.some(l => imgEntry[l] && imgEntry[l] !== imgEntry['ALL']);
-      let imgBlockHtml = '';
-      if (!hasMultiLang) {
-        // 單張（共用或無圖）
-        const imgUrl = escUrl(_getImgUrl(a.date, 'ALL', a.type));
-        const imgLink = imgUrl
-          ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link">🖼 查看圖片</a>`
+      const imgRows = langs.map(l => {
+        const url = escUrl(_getImgUrl(a.date, l, a.type));
+        const link = url
+          ? `<a href="${url}" target="_blank" rel="noopener noreferrer" class="lang-img-link">🖼 查看圖片</a>`
           : '<span class="lang-img-empty">尚無圖片</span>';
-        imgBlockHtml = `<div class="ann-img-row" onclick="stopProp(event)">${imgLink}<button class="ann-img-btn-sm" onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}','ALL')">📂 管理圖片</button></div>`;
-      } else {
-        // 多語系各自顯示
-        const rows = langs.map(l => {
-          const imgUrl = escUrl(_getImgUrl(a.date, l, a.type));
-          const imgLink = imgUrl
-            ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link">🖼 查看圖片</a>`
-            : '<span class="lang-img-empty">尚無圖片</span>';
-          return `<div class="ann-img-lang-row" onclick="stopProp(event)"><span class="ann-img-lang-code">${l}</span>${imgLink}<button class="ann-img-btn-sm" onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}','${l}')">📂</button></div>`;
-        }).join('');
-        imgBlockHtml = `<div class="ann-img-multi" onclick="stopProp(event)">${rows}</div>`;
-      }
+        return `<div class="ann-img-lang-row" onclick="stopProp(event)"><span class="ann-img-lang-code">${l}</span>${link}</div>`;
+      }).join('');
+      const imgBlockHtml = `<div class="ann-img-multi" onclick="stopProp(event)">${imgRows}</div>`;
 
       let cardDateWarn = '';
       if (a.type && a.type.includes('維護預告') && a.contentTW) {
@@ -684,6 +669,7 @@ function renderList() {
            ✈️ 發送到 Discord
          </button>`
     }
+    <button class="btn btn-outline btn-sm" onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}','ALL')">📂 管理圖片</button>
     ${a.type && a.type.includes('活動') ? `<button class="btn btn-outline btn-sm" onclick="buildErolabsDocs('${id}')">
       📄 建立 Erolabs 公告
     </button>` : ''}
@@ -1361,7 +1347,7 @@ function _getImgUrl(annDate, lang, annType) {
   const entry = _imgCache[key] || _imgCache[annDate]; // 舊 key 相容
   if (!entry) return '';
   if (typeof entry === 'string') return entry;
-  return entry[lang] || entry['ALL'] || '';
+  return entry[lang] || entry['ALL'] || entry['TW'] || entry['CN'] || entry['JP'] || entry['EN'] || '';
 }
 
 // 設定指定語系的圖片 URL
@@ -1488,7 +1474,7 @@ async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
 
   try {
     const rawUrl = await _githubPut(token, path, base64);
-    _imgCache[annDate] = rawUrl;
+    _setImgUrl(annDate, 'ALL', rawUrl, annType);
     _saveImgCache();
     const synced = await _syncImgCacheToGitHub();
     statusEl.textContent = '✅ 上傳成功';
@@ -1513,7 +1499,7 @@ function _updateCardImgPreview(cardId, url) {
 
 // ══ MODULE: IMAGE LIBRARY ════════════════════════════════════════
 
-let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '', _imgLibLang = 'ALL';
+let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '', _imgLibLang = 'TW';
 let _imgLibFolders    = [];
 let _currentTabIdx    = 0;
 let _isLoadingImgLib  = false;
@@ -1523,7 +1509,7 @@ async function openImgLibrary(cardId, annDate, annType, mmdd, lang) {
   _imgLibAnnDate = annDate;
   _imgLibAnnType = annType;
   _imgLibMmdd    = mmdd;
-  _imgLibLang    = lang || 'ALL';
+  _imgLibLang    = (lang && lang !== 'ALL') ? lang : 'TW';
 
   document.getElementById('modal-img-library').classList.add('open');
 
@@ -1540,12 +1526,12 @@ async function openImgLibrary(cardId, annDate, annType, mmdd, lang) {
   const langTabEl = document.getElementById('img-lib-lang-tabs');
   if (langTabEl) {
     if (!isMaint) {
-      const langs = ['ALL', 'TW', 'CN', 'JP', 'EN'];
+      const langs = ['TW', 'CN', 'JP', 'EN'];
       langTabEl.style.display = 'flex';
       langTabEl.innerHTML = langs.map(l => `
         <button onclick="switchImgLangTab('${l}')" id="img-lib-lang-${l}"
           class="img-lib-lang-btn${l === _imgLibLang ? ' active' : ''}">
-          ${l === 'ALL' ? '全部' : l}
+          ${l}
         </button>`).join('');
     } else {
       langTabEl.style.display = 'none';
@@ -1654,14 +1640,19 @@ function selectImgFromLibrary(url, name) {
 
 async function applySelectedImg() {
   if (!_imgLibSelectedUrl) return;
+  // 先設定當前語系
   _setImgUrl(_imgLibAnnDate, _imgLibLang, _imgLibSelectedUrl, _imgLibAnnType);
+  // 若其他語系沒有圖，也填入同一張
+  ['TW', 'CN', 'JP', 'EN'].forEach(l => {
+    if (!_getImgUrl(_imgLibAnnDate, l, _imgLibAnnType)) {
+      _setImgUrl(_imgLibAnnDate, l, _imgLibSelectedUrl, _imgLibAnnType);
+    }
+  });
   _saveImgCache();
   const synced = await _syncImgCacheToGitHub();
   closeImgLibrary();
   renderList();
-  toast(synced
-    ? `✅ 已套用圖片到 ${_imgLibLang === 'ALL' ? '全部語系' : _imgLibLang}`
-    : '⚠️ 已套用圖片，但同步失敗，其他裝置可能看不到');
+  toast(synced ? `✅ 已套用圖片到 ${_imgLibLang}` : '⚠️ 已套用圖片，但同步失敗，其他裝置可能看不到');
 }
 
 // 選檔後顯示預覽，不立即上傳
@@ -1731,6 +1722,12 @@ async function confirmUploadImg() {
   try {
     const rawUrl = await _githubPut(token, path, base64);
     _setImgUrl(_imgLibAnnDate, _imgLibLang, rawUrl, _imgLibAnnType);
+    // 若其他語系沒有圖，也填入同一張
+    ['TW', 'CN', 'JP', 'EN'].forEach(l => {
+      if (!_getImgUrl(_imgLibAnnDate, l, _imgLibAnnType)) {
+        _setImgUrl(_imgLibAnnDate, l, rawUrl, _imgLibAnnType);
+      }
+    });
     _saveImgCache();
     const synced = await _syncImgCacheToGitHub();
     statusEl.textContent = '✅ 上傳成功，已自動套用';
