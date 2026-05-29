@@ -1727,7 +1727,20 @@ async function confirmUploadImg() {
     statusEl.textContent = `✅ 上傳成功，已套用到 ${_imgLibLang}`;
     clearUploadPreview();
     _imgLibRenderLangTabs();
-    await _imgLibLoadFolder(_imgLibCurrentFolder);
+    // 直接插入 grid，不重新載入（GitHub API 有快取延遲）
+    const grid = document.getElementById('img-lib-grid');
+    const imgGrid = grid?.querySelector('.img-lib-img-grid');
+    if (imgGrid) {
+      const thumbUrl  = escUrl(rawUrl + '?t=' + Date.now());
+      const thumbName = escHtml(safeName);
+      const newThumb = document.createElement('div');
+      newThumb.className = 'img-lib-thumb selected';
+      newThumb.innerHTML = `<img src="${thumbUrl}" loading="lazy"><div class="img-lib-name" title="${thumbName}">${thumbName}</div>`;
+      newThumb.onclick = () => selectImgFromLibrary(thumbUrl, thumbName);
+      // 移除其他 selected
+      imgGrid.querySelectorAll('.img-lib-thumb').forEach(el => el.classList.remove('selected'));
+      imgGrid.prepend(newThumb);
+    }
   } catch (e) {
     statusEl.textContent  = '❌ 上傳失敗：' + e.message;
     uploadBtn.disabled    = false;
