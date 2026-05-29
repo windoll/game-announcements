@@ -60,7 +60,6 @@
           <option value="past">過去</option>
         </select>
         <button class="btn btn-outline btn-sm" onclick="loadSheet()">↻ 重新整理</button>
-        <button class="btn btn-outline btn-sm" id="btn-sync-img" onclick="syncImgCache()" disabled>🖼 同步圖片</button>
       </div>
 
       <div id="list-area">
@@ -398,7 +397,6 @@ async function loadSheet() {
 
     document.getElementById('list-updated').textContent =
       `上次更新：${new Date().toLocaleString('zh-TW')}`;
-    document.getElementById('btn-sync-img').disabled = false;
     renderList();
     _loadImgCacheFromGitHub();
   } catch (e) {
@@ -1357,9 +1355,12 @@ function _markImgCacheFetched() {
   localStorage.setItem('ann-img-cache-ts', Date.now().toString());
 }
 
+let _isSyncingImgCache = false;
 async function _syncImgCacheToGitHub() {
+  if (_isSyncingImgCache) return false; // 避免同時打兩次
+  _isSyncingImgCache = true;
   const token = getCfg().githubToken;
-  if (!token) return false;
+  if (!token) { _isSyncingImgCache = false; return false; }
   try {
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(_imgCache, null, 2))));
     await _githubPut(token, 'images/index.json', content);
@@ -1368,6 +1369,8 @@ async function _syncImgCacheToGitHub() {
   } catch (e) {
     console.warn('同步 index.json 失敗', e);
     return false;
+  } finally {
+    _isSyncingImgCache = false;
   }
 }
 
@@ -1622,16 +1625,6 @@ async function closeImgLibrary() {
   }
 }
 
-// ══ MODULE: IMG CACHE SYNC ═══════════════════════════════════════
-
-async function syncImgCache() {
-  const btn = document.getElementById('btn-sync-img');
-  if (btn) { btn.disabled = true; btn.textContent = '同步中…'; }
-  localStorage.removeItem('ann-img-cache-ts');
-  await _loadImgCacheFromGitHub();
-  if (btn) { btn.disabled = false; btn.textContent = '🖼 同步圖片'; }
-  toast('✅ 圖片已同步');
-}
 
 // ══ MODULE: INIT ═════════════════════════════════════════════════
 
@@ -1657,7 +1650,7 @@ Object.assign(window, {
   markCfgUnsaved, addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
   openImgLibrary, _imgLibLoadFolder, switchImgLangTab, selectImgFromLibrary, closeImgLibrary,
-  syncImgCache, deleteSchedule, clearAnnImg,
+  deleteSchedule, clearAnnImg,
 });
 
 })();
