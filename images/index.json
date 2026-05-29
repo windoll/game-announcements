@@ -1,15 +1,20 @@
 {
+  "6/10_ç¶­è­·é å": {
+    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/ç¶­è­·/Maintenance_TW.jpg",
+    "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/ç¶­è­·/Maintenance_JP.jpg",
+    "EN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/ç¶­è­·/Maintenance_EN.jpg"
+  },
+  "6/10_æ´»åå¬å": {
+    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/æ´»å/0610/TW.png",
+    "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/æ´»å/0610/JP.png",
+    "CN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/æ´»å/0610/CN.png",
+    "EN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/æ´»å/0610/EN.png"
+  },
+  "6/3_æ´»åå¬å": {},
+  "6/3_ç¶­è­·é å": {},
   "6/10_維護預告": {
-    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_TW.jpg",
+    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_JP.jpg",
     "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_JP.jpg",
     "EN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_EN.jpg"
-  },
-  "6/10_活動公告": {
-    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/TW.png",
-    "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/JP.png",
-    "CN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/CN.png",
-    "EN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/EN.png"
-  },
-  "6/3_活動公告": {},
-  "6/3_維護預告": {}
+  }
 }
