@@ -1000,6 +1000,15 @@ function renderList() {
 
       const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
 
+      _annMap.set(id, a);
+      const safeType = escHtml((a.type || '').replace(/'/g, ''));
+      const safeMmdd = escHtml((() => {
+        const parts = (a.date || '').split('/');
+        return parts.length === 2
+          ? parts[0].padStart(2,'0') + parts[1].padStart(2,'0')
+          : (a.date || '').replace(/\//g, '');
+      })());
+      const safeDate = escHtml(a.date || '');
 
       const mkContent = (code, lang, val) => {
         const imgUrl = escUrl(_getImgUrl(a.date, lang));
@@ -1048,15 +1057,6 @@ function renderList() {
       }
 
       const scheduleBadges = _getScheduleBadgesHtml(a.date, schedulesAll, id);
-      _annMap.set(id, a); // 存入 Map，供 onclick 查詢
-      const safeType       = escHtml((a.type || '').replace(/'/g, ''));
-      const safeMmdd       = escHtml((() => {
-        const parts = (a.date || '').split('/');
-        return parts.length === 2
-          ? parts[0].padStart(2,'0') + parts[1].padStart(2,'0')
-          : (a.date || '').replace(/\//g, '');
-      })());
-      const safeDate       = escHtml(a.date || '');
 
       html += `
 <div class="ann-card" id="card-${id}" style="border-left-color:${bc}" onclick="toggleCard('${id}')">
