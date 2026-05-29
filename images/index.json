@@ -1,3 +1,10 @@
 {
   "6/10": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance.jpg",
+  "6/3": {
+    "ALL": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0603/00.png",
+    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0603/0603_TW.png",
+    "CN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0603/00.png",
+    "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0603/00.png",
+    "EN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0603/00.png"
+  }
 }
