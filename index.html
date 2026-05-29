@@ -399,7 +399,6 @@ async function loadSheet() {
     document.getElementById('list-updated').textContent =
       `上次更新：${new Date().toLocaleString('zh-TW')}`;
     renderList();
-    _loadImgCacheFromGitHub();
   } catch (e) {
     document.getElementById('list-area').innerHTML =
       `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;color:#991b1b;font-size:0.85rem;">
@@ -1370,7 +1369,9 @@ async function _syncImgCacheToGitHub() {
   const token = getCfg().githubToken;
   if (!token) { _isSyncingImgCache = false; _setSyncStatus('error'); return false; }
   try {
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(_imgCache, null, 2))));
+    const jsonStr = JSON.stringify(_imgCache, null, 2);
+    const bytes = new TextEncoder().encode(jsonStr);
+    const content = btoa(String.fromCharCode(...bytes));
     await _githubPut(token, 'images/index.json', content);
     _imgCacheDirty = false;
     _setSyncStatus('clean');
