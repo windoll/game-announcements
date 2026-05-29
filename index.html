@@ -1388,17 +1388,12 @@ async function _loadImgCacheFromGitHub() {
         _imgCache[key] = val;
       }
     }
-    _saveImgCache();
+    localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
     _markImgCacheFetched();
     if (allData.length) renderList();
   } catch (e) {
     console.warn('載入 index.json 失敗', e);
   }
-}
-
-function _imgFolder(annType, mmdd) {
-  if (annType.includes('維護')) return 'images/維護';
-  return `images/活動/${mmdd}`;
 }
 
 async function _githubPut(token, path, base64) {
@@ -1429,7 +1424,7 @@ async function _githubListImages(token, folder) {
   if (!res.ok) return [];
   const items = await res.json();
   return items.filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name))
-    .map(f => ({ name: f.name, sha: f.sha, url: `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${folder}/${f.name}` }));
+    .map(f => ({ name: f.name, url: `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${folder}/${f.name}` }));
 }
 
 async function clearAnnImg(annDate, annType, lang) {
@@ -1443,52 +1438,6 @@ async function clearAnnImg(annDate, annType, lang) {
   _syncImgCacheToGitHub();
 }
 
-async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
-  const file = event.target.files[0];
-  if (!file) return;
-  event.target.value = '';
-
-  const token = getCfg().githubToken;
-  if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
-
-  const statusEl = document.getElementById('img-upload-status-' + cardId);
-  statusEl.textContent = '上傳中…';
-
-  const folder   = _imgFolder(annType, mmdd);
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path     = `${folder}/${safeName}`;
-
-  const base64 = await new Promise((res, rej) => {
-    const reader = new FileReader();
-    reader.onload = e => res(e.target.result.split(',')[1]);
-    reader.onerror = rej;
-    reader.readAsDataURL(file);
-  });
-
-  try {
-    const rawUrl = await _githubPut(token, path, base64);
-    _setImgUrl(annDate, 'ALL', rawUrl, annType);
-    _saveImgCache();
-    const synced = await _syncImgCacheToGitHub();
-    statusEl.textContent = '✅ 上傳成功';
-    _updateCardImgPreview(cardId, rawUrl);
-    if (synced) {
-      toast('✅ 圖片已上傳');
-    } else {
-      toast('⚠️ 圖片已上傳，但同步失敗，其他裝置可能看不到');
-    }
-  } catch (e) {
-    statusEl.textContent = '❌ ' + e.message;
-  }
-}
-
-function _updateCardImgPreview(cardId, url) {
-  const el      = document.getElementById('img-preview-' + cardId);
-  const safeUrl = escUrl(url);
-  if (el && safeUrl) {
-    el.innerHTML = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>`;
-  }
-}
 
 // ══ MODULE: IMAGE LIBRARY ════════════════════════════════════════
 
