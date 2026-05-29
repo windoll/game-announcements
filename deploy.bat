@@ -20,7 +20,7 @@ if errorlevel 1 (
 
 git push origin main
 if errorlevel 1 (
-    echo Push failed
+    echo Push failed - check git output above
     pause
     exit /b 1
 )
