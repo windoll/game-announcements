@@ -1735,7 +1735,7 @@ async function confirmUploadImg() {
     const grid = document.getElementById('img-lib-grid');
     const empty = document.getElementById('img-lib-empty');
     if (grid) {
-      const safeUrl      = escUrl(rawUrl);
+      const safeUrl      = escUrl(rawUrl + '?t=' + Date.now());
       const displayName  = escHtml(safeName);
       const newThumb = document.createElement('div');
       newThumb.className = 'img-lib-thumb selected';
