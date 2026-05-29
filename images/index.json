@@ -4,9 +4,10 @@
     "EN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_EN.jpg"
   },
   "6/10_活動公告": {
-    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/EN.png",
+    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/TW.png",
     "CN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/CN.png",
-    "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/JP.png"
+    "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/JP.png",
+    "EN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/EN.png"
   },
   "6/3_活動公告": {}
 }
