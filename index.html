@@ -279,6 +279,33 @@ body {
 }
 .img-lib-selected-name { font-size: 0.8rem; color: #5b21b6; flex: 1; }
 
+/* ── 圖片庫：上傳區塊 ── */
+.img-lib-upload-area {
+  margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px;
+}
+.img-lib-upload-label {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  color: #6366f1; font-size: 0.83rem; font-weight: 600;
+  border: 1px dashed #6366f1; border-radius: 8px; padding: 7px 14px;
+  transition: background 0.15s;
+}
+.img-lib-upload-label:hover { background: #f5f3ff; }
+.img-lib-upload-preview {
+  display: flex; align-items: center; gap: 10px;
+  background: #f9fafb; border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+}
+.img-lib-upload-preview img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; }
+.img-lib-upload-preview-info { flex: 1; min-width: 0; }
+.img-lib-upload-preview-name { font-size: 0.83rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.img-lib-upload-preview-size { font-size: 0.75rem; color: var(--text-sub); margin-top: 2px; }
+.img-lib-upload-clear {
+  background: none; border: none; color: #9ca3af; cursor: pointer;
+  font-size: 0.9rem; padding: 4px; border-radius: 4px;
+}
+.img-lib-upload-clear:hover { color: #ef4444; }
+.img-lib-upload-status { font-size: 0.8rem; color: var(--text-sub); margin-top: 8px; min-height: 18px; }
+
 /* ── 公告卡片：圖片列 ── */
 .ann-img-row {
   margin-top: 5px; font-size: 0.75rem;
@@ -542,17 +569,35 @@ body {
 <!-- 圖片庫 Modal -->
 <div class="modal-bg" id="modal-img-library">
   <div class="modal modal-img">
-    <h3>📂 圖片庫</h3>
+    <h3>📂 管理圖片</h3>
     <div id="img-lib-tabs" class="img-lib-tabs"></div>
     <div id="img-lib-grid" class="img-lib-grid"></div>
     <div id="img-lib-empty" class="img-lib-empty" style="display:none;">此分類尚無圖片</div>
     <div id="img-lib-loading" class="img-lib-loading">載入中…</div>
+    <!-- 選取預覽 -->
     <div id="img-lib-preview" class="img-lib-selected-preview" style="display:none;">
       <img id="img-lib-preview-img" src="">
       <span id="img-lib-preview-name" class="img-lib-selected-name"></span>
     </div>
+    <!-- 上傳區塊 -->
+    <div class="img-lib-upload-area" id="img-lib-upload-area" style="display:none;">
+      <div class="img-lib-upload-preview" id="img-lib-upload-preview" style="display:none;">
+        <img id="img-lib-upload-preview-img" src="">
+        <div class="img-lib-upload-preview-info">
+          <div id="img-lib-upload-preview-name" class="img-lib-upload-preview-name"></div>
+          <div id="img-lib-upload-preview-size" class="img-lib-upload-preview-size"></div>
+        </div>
+        <button class="img-lib-upload-clear" onclick="clearUploadPreview()" title="取消選取">✕</button>
+      </div>
+      <label id="img-lib-upload-label" class="img-lib-upload-label">
+        ⬆ 選擇圖片上傳
+        <input type="file" accept="image/*" style="display:none;" id="img-lib-upload-input" onchange="previewUploadFile(event)">
+      </label>
+      <div id="img-lib-upload-status" class="img-lib-upload-status"></div>
+    </div>
     <div class="modal-footer modal-footer-sm">
       <button class="btn btn-outline" onclick="closeImgLibrary()">取消</button>
+      <button class="btn btn-outline btn-sm" id="btn-img-lib-upload" onclick="confirmUploadImg()" style="display:none;" disabled>⬆ 確認上傳</button>
       <button class="btn btn-primary" id="btn-img-lib-apply" onclick="applySelectedImg()" disabled>套用選取的圖片</button>
     </div>
   </div>
@@ -976,7 +1021,12 @@ function renderList() {
       const scheduleBadges = _getScheduleBadgesHtml(a.date, schedulesAll, id);
       _annMap.set(id, a); // 存入 Map，供 onclick 查詢
       const safeType       = escHtml((a.type || '').replace(/'/g, ''));
-      const safeMmdd       = escHtml((a.date || '').replace(/\//g, ''));
+      const safeMmdd       = escHtml((() => {
+        const parts = (a.date || '').split('/');
+        return parts.length === 2
+          ? parts[0].padStart(2,'0') + parts[1].padStart(2,'0')
+          : (a.date || '').replace(/\//g, '');
+      })());
       const safeDate       = escHtml(a.date || '');
 
       html += `
@@ -994,12 +1044,7 @@ function renderList() {
   ${scheduleBadges ? `<div class="schedule-badges">${scheduleBadges}</div>` : ''}
   <div class="ann-img-row" onclick="stopProp(event)">
     <span id="img-preview-${id}">${imgPreviewHtml}</span>
-    <button class="ann-img-btn" onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}')">📂 圖片庫</button>
-    <label class="ann-img-upload-label">
-      ⬆ 上傳新圖
-      <input type="file" accept="image/*" style="display:none;" onchange="uploadImageToGitHub(event,'${id}','${safeDate}','${safeType}','${safeMmdd}')">
-    </label>
-    <span id="img-upload-status-${id}" class="ann-img-status"></span>
+    <button class="ann-img-btn" onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}')">📂 管理圖片</button>
   </div>
   ${contentHtml}
   ${!isDraft ? `
@@ -1812,10 +1857,14 @@ async function openImgLibrary(cardId, annDate, annType, mmdd) {
 
   document.getElementById('modal-img-library').classList.add('open');
 
+  // 顯示上傳區塊
+  const uploadArea = document.getElementById('img-lib-upload-area');
+  if (uploadArea) uploadArea.style.display = 'block';
+
   const isMaint = annType.includes('維護');
   const folders = isMaint
     ? [{ label: '維護圖片', folder: 'images/維護' }]
-    : [{ label: `活動 ${annDate}`, folder: `images/活動/${mmdd}` }, { label: '維護圖片', folder: 'images/維護' }];
+    : [{ label: `活動 ${annDate}`, folder: `images/活動/${mmdd}` }];
 
   const tabEl = document.getElementById('img-lib-tabs');
   tabEl.innerHTML = folders.map((f, i) => `
@@ -1877,6 +1926,7 @@ async function switchImgLibTab(idx) {
 }
 
 let _imgLibSelectedUrl = '';
+let _uploadFile = null; // 待上傳的 File 物件
 
 function selectImgFromLibrary(url, name) {
   _imgLibSelectedUrl = url;
@@ -1908,12 +1958,99 @@ async function applySelectedImg() {
   }
 }
 
+// 選檔後顯示預覽，不立即上傳
+function previewUploadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  _uploadFile = file;
+
+  const previewWrap = document.getElementById('img-lib-upload-preview');
+  const previewImg  = document.getElementById('img-lib-upload-preview-img');
+  const previewName = document.getElementById('img-lib-upload-preview-name');
+  const previewSize = document.getElementById('img-lib-upload-preview-size');
+  const uploadLabel = document.getElementById('img-lib-upload-label');
+  const uploadBtn   = document.getElementById('btn-img-lib-upload');
+
+  const reader = new FileReader();
+  reader.onload = e => { previewImg.src = e.target.result; };
+  reader.readAsDataURL(file);
+
+  previewName.textContent = file.name;
+  previewSize.textContent = (file.size / 1024).toFixed(1) + ' KB';
+  previewWrap.style.display = 'flex';
+  uploadLabel.style.display = 'none';
+  uploadBtn.style.display   = 'inline-flex';
+  uploadBtn.disabled        = false;
+  document.getElementById('img-lib-upload-status').textContent = '';
+}
+
+function clearUploadPreview() {
+  _uploadFile = null;
+  const previewWrap = document.getElementById('img-lib-upload-preview');
+  const uploadLabel = document.getElementById('img-lib-upload-label');
+  const uploadBtn   = document.getElementById('btn-img-lib-upload');
+  const input       = document.getElementById('img-lib-upload-input');
+  if (previewWrap) previewWrap.style.display = 'none';
+  if (uploadLabel) uploadLabel.style.display = 'inline-flex';
+  if (uploadBtn)   { uploadBtn.style.display = 'none'; uploadBtn.disabled = true; }
+  if (input)       input.value = '';
+  document.getElementById('img-lib-upload-status').textContent = '';
+}
+
+async function confirmUploadImg() {
+  if (!_uploadFile) return;
+  const token = getCfg().githubToken;
+  if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
+
+  const uploadBtn    = document.getElementById('btn-img-lib-upload');
+  const statusEl     = document.getElementById('img-lib-upload-status');
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = '上傳中…';
+  statusEl.textContent  = '';
+
+  // 上傳到目前選中的分頁資料夾
+  const currentTabIdx = Array.from(document.querySelectorAll('.img-lib-tabs button'))
+    .findIndex(btn => btn.style.background === 'rgb(99, 102, 241)');
+  const folderIdx = currentTabIdx >= 0 ? currentTabIdx : 0;
+  const folder    = _imgLibFolders[folderIdx]?.folder || _imgFolder(_imgLibAnnType, _imgLibMmdd);
+
+  const safeName = _uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path     = `${folder}/${safeName}`;
+
+  const base64 = await new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = e => res(e.target.result.split(',')[1]);
+    reader.onerror = rej;
+    reader.readAsDataURL(_uploadFile);
+  });
+
+  try {
+    const rawUrl = await _githubPut(token, path, base64);
+    // 自動套用到此公告
+    _imgCache[_imgLibAnnDate] = rawUrl;
+    _saveImgCache();
+    const synced = await _syncImgCacheToGitHub();
+    _updateCardImgPreview(_imgLibCardId, rawUrl);
+    statusEl.textContent = '✅ 上傳成功，已自動套用';
+    // 重新整理圖片列表
+    await switchImgLibTab(folderIdx);
+    clearUploadPreview();
+    if (!synced) toast('⚠️ 上傳成功，但同步失敗，其他裝置可能看不到');
+  } catch (e) {
+    statusEl.textContent = '❌ 上傳失敗：' + e.message;
+    uploadBtn.disabled   = false;
+    uploadBtn.textContent = '⬆ 確認上傳';
+  }
+}
+
 function closeImgLibrary() {
   _imgLibSelectedUrl = '';
+  _uploadFile        = null;
   const preview = document.getElementById('img-lib-preview');
   if (preview) preview.style.display = 'none';
   const applyBtn = document.getElementById('btn-img-lib-apply');
   if (applyBtn) applyBtn.disabled = true;
+  clearUploadPreview();
   document.getElementById('modal-img-library').classList.remove('open');
 }
 
@@ -1947,7 +2084,8 @@ Object.assign(window, {
   loadSettings, toggleTestMode, saveSettings, exportSettings, importSettings,
   markCfgUnsaved, addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
-  uploadImageToGitHub, openImgLibrary, switchImgLibTab, selectImgFromLibrary, applySelectedImg, closeImgLibrary,
+  openImgLibrary, switchImgLibTab, selectImgFromLibrary, applySelectedImg,
+  previewUploadFile, clearUploadPreview, confirmUploadImg, closeImgLibrary,
   syncImgCache, deleteSchedule,
 });
 
