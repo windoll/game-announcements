@@ -245,8 +245,39 @@ body {
   font-size: 0.72rem; font-weight: 600;
   background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd;
   padding: 2px 8px; border-radius: 20px; white-space: nowrap;
-  display: inline-flex; align-items: center; gap: 3px;
+  display: inline-flex; align-items: center; gap: 4px;
 }
+.scheduled-badge-del {
+  cursor: pointer; opacity: 0.5; font-size: 0.65rem; line-height: 1;
+  padding: 0 1px; border-radius: 50%;
+}
+.scheduled-badge-del:hover { opacity: 1; }
+
+/* ── 過去公告補發按鈕 ── */
+.btn-past-send {
+  background: white; color: #6b7280;
+  border: 1px dashed #d1d5db; font-size: 0.78rem;
+}
+.btn-past-send:hover { border-color: #9ca3af; color: #374151; opacity: 1; }
+
+/* ── 設定頁未儲存提示 ── */
+.cfg-unsaved {
+  display: none; font-size: 0.78rem; color: #d97706; font-weight: 600;
+  padding: 4px 10px; background: #fef3c7; border-radius: 6px;
+  border: 1px solid #f59e0b;
+}
+
+/* ── 圖片庫選取狀態 ── */
+.img-lib-thumb.selected { border-color: #6366f1; }
+.img-lib-selected-preview {
+  margin-top: 10px; padding: 10px; background: #f5f3ff;
+  border: 1px solid #c4b5fd; border-radius: 8px;
+  display: flex; align-items: center; gap: 10px;
+}
+.img-lib-selected-preview img {
+  width: 60px; height: 60px; object-fit: cover; border-radius: 6px;
+}
+.img-lib-selected-name { font-size: 0.8rem; color: #5b21b6; flex: 1; }
 
 /* ── 公告卡片：圖片列 ── */
 .ann-img-row {
@@ -415,17 +446,17 @@ body {
       <div class="card">
         <div class="cfg-section-title">📋 基本資訊</div>
         <div class="field-label">專案名稱（顯示在側邊欄）</div>
-        <input type="text" id="cfg-project-name" placeholder="雀星公告管理" class="cfg-input">
+        <input type="text" id="cfg-project-name" placeholder="雀星公告管理" class="cfg-input" oninput="markCfgUnsaved()">
 
         <div class="field-label">Google Sheet ID</div>
-        <input type="text" id="cfg-sheet-id" placeholder="試算表 ID（網址中的那段）" class="cfg-input cfg-input-mono">
+        <input type="text" id="cfg-sheet-id" placeholder="試算表 ID（網址中的那段）" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
 
         <div class="field-label">Google Sheet GID（工作表 ID）</div>
-        <input type="text" id="cfg-sheet-gid" placeholder="e.g. 1281351206" class="cfg-input cfg-input-mono">
+        <input type="text" id="cfg-sheet-gid" placeholder="e.g. 1281351206" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
         <div class="cfg-hint">在試算表網址 ?gid= 後面的數字</div>
 
         <div class="field-label">GitHub Personal Access Token</div>
-        <input type="password" id="cfg-github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" class="cfg-input cfg-input-mono" style="margin-bottom:0;">
+        <input type="password" id="cfg-github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
         <div class="cfg-hint-top">用於上傳圖片到 GitHub repo（windoll/game-announcements）</div>
       </div>
 
@@ -468,10 +499,11 @@ body {
         <div class="cfg-webhook-hint">Webhook URL 格式：https://discord.com/api/webhooks/...</div>
       </div>
 
-      <div class="cfg-row-gap">
+      <div class="cfg-row-gap" style="align-items:center;">
         <button class="btn btn-primary" onclick="saveSettings()">💾 儲存設定</button>
         <button class="btn btn-outline" onclick="exportSettings()">📤 匯出設定</button>
         <label class="btn btn-outline" style="cursor:pointer;">📥 匯入設定<input type="file" accept=".json" style="display:none;" onchange="importSettings(event)"></label>
+        <span id="cfg-unsaved" class="cfg-unsaved">● 有未儲存的變更</span>
       </div>
     </div>
 
@@ -515,8 +547,13 @@ body {
     <div id="img-lib-grid" class="img-lib-grid"></div>
     <div id="img-lib-empty" class="img-lib-empty" style="display:none;">此分類尚無圖片</div>
     <div id="img-lib-loading" class="img-lib-loading">載入中…</div>
+    <div id="img-lib-preview" class="img-lib-selected-preview" style="display:none;">
+      <img id="img-lib-preview-img" src="">
+      <span id="img-lib-preview-name" class="img-lib-selected-name"></span>
+    </div>
     <div class="modal-footer modal-footer-sm">
       <button class="btn btn-outline" onclick="closeImgLibrary()">取消</button>
+      <button class="btn btn-primary" id="btn-img-lib-apply" onclick="applySelectedImg()" disabled>套用選取的圖片</button>
     </div>
   </div>
 </div>
@@ -820,9 +857,18 @@ function _getScheduleBadgesHtml(annDate, schedulesAll) {
     localStorage.setItem('ann-schedules', JSON.stringify(schedulesAll));
   }
 
-  return valid.map(r =>
-    `<span class="scheduled-badge">✈️ ${escHtml(r.sendDate)} ${escHtml(r.sendTime)}${r.typeName ? ' · ' + escHtml(r.typeName) : ''}</span>`
-  ).join(' ');
+  return valid.map((r, i) => {
+    const label = `✈️ ${escHtml(r.sendDate)} ${escHtml(r.sendTime)}${r.typeName ? ' · ' + escHtml(r.typeName) : ''}`;
+    return `<span class="scheduled-badge">${label}<span class="scheduled-badge-del" onclick="stopProp(event);deleteSchedule('${escHtml(annDate)}',${i})" title="刪除此排程記錄">✕</span></span>`;
+  }).join(' ');
+}
+
+function deleteSchedule(annDate, idx) {
+  const all = _getSchedules();
+  if (!all[annDate]) return;
+  all[annDate].splice(idx, 1);
+  localStorage.setItem('ann-schedules', JSON.stringify(all));
+  renderList();
 }
 
 // ══ MODULE: RENDER LIST ══════════════════════════════════════════
@@ -927,7 +973,7 @@ function renderList() {
         ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>`
         : '<span style="color:#bbb;">尚無圖片</span>';
 
-      const scheduleBadges = _getScheduleBadgesHtml(a.date, schedulesAll);
+      const scheduleBadges = _getScheduleBadgesHtml(a.date, schedulesAll, id);
       _annMap.set(id, a); // 存入 Map，供 onclick 查詢
       const safeType       = escHtml((a.type || '').replace(/'/g, ''));
       const safeMmdd       = escHtml((a.date || '').replace(/\//g, ''));
@@ -956,11 +1002,16 @@ function renderList() {
     <span id="img-upload-status-${id}" class="ann-img-status"></span>
   </div>
   ${contentHtml}
-  ${!isDraft && st !== 'past' ? `
+  ${!isDraft ? `
   <div class="ann-actions" onclick="stopProp(event)">
-    <button class="btn btn-green btn-sm" onclick="openSendModal('${id}')">
-      ✈️ 發送到 Discord
-    </button>
+    ${st === 'past'
+      ? `<button class="btn btn-past-send btn-sm" onclick="openSendModal('${id}')" title="此公告已過期，確定要補發嗎？">
+           ↩ 補發到 Discord
+         </button>`
+      : `<button class="btn btn-green btn-sm" onclick="openSendModal('${id}')">
+           ✈️ 發送到 Discord
+         </button>`
+    }
     ${a.type && a.type.includes('活動') ? `<button class="btn btn-outline btn-sm" onclick="buildErolabsDocs('${id}')">
       📄 建立 Erolabs 公告
     </button>` : ''}
@@ -1181,6 +1232,14 @@ async function confirmSend() {
     return;
   }
 
+  // 排程衝突提示：此公告已有未來排程
+  const existingSchedules = (_getSchedules()[pendingAnn.date] || []);
+  if (existingSchedules.length > 0) {
+    const existing = existingSchedules.map(r => `${r.sendDate} ${r.sendTime}`).join('、');
+    const confirmed = confirm(`⚠️ 此公告已有排程：${existing}\n\n確定要再新增一個排程嗎？`);
+    if (!confirmed) return;
+  }
+
   const btn = document.getElementById('modal-confirm-btn');
   btn.disabled    = true;
   btn.textContent = '發送中...';
@@ -1394,6 +1453,16 @@ function removeType(ti, mode) {
   renderAnnouncementTypes(types, mode);
 }
 
+function markCfgUnsaved() {
+  const el = document.getElementById('cfg-unsaved');
+  if (el) el.style.display = 'inline-block';
+}
+
+function clearCfgUnsaved() {
+  const el = document.getElementById('cfg-unsaved');
+  if (el) el.style.display = 'none';
+}
+
 function saveSettings() {
   const cfg = getCfg();
   const updated = Object.assign({}, cfg, {
@@ -1405,6 +1474,7 @@ function saveSettings() {
   localStorage.setItem('ann-cfg', JSON.stringify(updated));
   const pnEl = document.querySelector('.sidebar .project-name');
   if (pnEl) pnEl.textContent = updated.projectName;
+  clearCfgUnsaved();
   toast('✅ 設定已儲存');
 }
 
@@ -1796,7 +1866,7 @@ async function switchImgLibTab(idx) {
       const safeUrl  = escUrl(img.url);
       const safeName = escHtml(img.name);
       return `
-      <div class="img-lib-thumb" onclick="selectImgFromLibrary('${safeUrl}')">
+      <div class="img-lib-thumb" onclick="selectImgFromLibrary('${safeUrl}','${safeName}')">
         <img src="${safeUrl}" loading="lazy">
         <div class="img-lib-name" title="${safeName}">${safeName}</div>
       </div>`;
@@ -1806,11 +1876,30 @@ async function switchImgLibTab(idx) {
   }
 }
 
-async function selectImgFromLibrary(url) {
-  _imgCache[_imgLibAnnDate] = url;
+let _imgLibSelectedUrl = '';
+
+function selectImgFromLibrary(url, name) {
+  _imgLibSelectedUrl = url;
+  // 高亮選取的縮圖
+  document.querySelectorAll('.img-lib-thumb').forEach(el => el.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  // 顯示預覽
+  const preview = document.getElementById('img-lib-preview');
+  const previewImg = document.getElementById('img-lib-preview-img');
+  const previewName = document.getElementById('img-lib-preview-name');
+  previewImg.src = url;
+  previewName.textContent = name || '';
+  preview.style.display = 'flex';
+  // 啟用套用按鈕
+  document.getElementById('btn-img-lib-apply').disabled = false;
+}
+
+async function applySelectedImg() {
+  if (!_imgLibSelectedUrl) return;
+  _imgCache[_imgLibAnnDate] = _imgLibSelectedUrl;
   _saveImgCache();
   const synced = await _syncImgCacheToGitHub();
-  _updateCardImgPreview(_imgLibCardId, url);
+  _updateCardImgPreview(_imgLibCardId, _imgLibSelectedUrl);
   closeImgLibrary();
   if (synced) {
     toast('✅ 已套用圖片');
@@ -1820,6 +1909,11 @@ async function selectImgFromLibrary(url) {
 }
 
 function closeImgLibrary() {
+  _imgLibSelectedUrl = '';
+  const preview = document.getElementById('img-lib-preview');
+  if (preview) preview.style.display = 'none';
+  const applyBtn = document.getElementById('btn-img-lib-apply');
+  if (applyBtn) applyBtn.disabled = true;
   document.getElementById('modal-img-library').classList.remove('open');
 }
 
@@ -1851,10 +1945,10 @@ Object.assign(window, {
   stopProp, checkPassword, showPage, loadSheet, renderList, toggleCard,
   openSendModal, renderModalLangs, closeModal, confirmSend,
   loadSettings, toggleTestMode, saveSettings, exportSettings, importSettings,
-  addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
+  markCfgUnsaved, addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
-  uploadImageToGitHub, openImgLibrary, switchImgLibTab, selectImgFromLibrary, closeImgLibrary,
-  syncImgCache,
+  uploadImageToGitHub, openImgLibrary, switchImgLibTab, selectImgFromLibrary, applySelectedImg, closeImgLibrary,
+  syncImgCache, deleteSchedule,
 });
 
 })();
