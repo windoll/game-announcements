@@ -1550,6 +1550,8 @@ async function openImgLibrary(cardId, annDate, annType, mmdd, lang) {
   }
 
   _imgLibFolders = folders;
+  _currentTabIdx = 0;
+  document.getElementById('img-lib-grid').innerHTML = '';
   switchImgLibTab(0);
 }
 
