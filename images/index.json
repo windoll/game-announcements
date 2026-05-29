@@ -1,8 +1,13 @@
 {
   "6/10_維護預告": {
-    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_TW.jpg"
+    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_TW.jpg",
+    "EN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_EN.jpg",
+    "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_JP.jpg"
   },
-  "6/10_活動公告": {},
+  "6/10_活動公告": {
+    "CN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/CN.png",
+    "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/活動/0610/JP.png"
+  },
   "6/3_活動公告": {},
   "6/3_維護預告": {
     "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_JP.jpg"
