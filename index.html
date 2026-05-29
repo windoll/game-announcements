@@ -344,8 +344,17 @@ body {
 .modal-select-date { flex: 2; }
 .modal-select-time { flex: 1; }
 
+/* ── 圖片庫語系 tab ── */
+.img-lib-lang-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.img-lib-lang-btn {
+  padding: 3px 12px; border-radius: 20px; border: 1px solid var(--border);
+  cursor: pointer; font-size: 0.78rem; font-weight: 600; background: white; color: #374151;
+  transition: background 0.15s, color 0.15s;
+}
+.img-lib-lang-btn.active { background: #6366f1; color: white; border-color: #6366f1; }
+
 /* ── 圖片庫 ── */
-.img-lib-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.img-lib-tabs { display: flex; gap: 8px; margin-bottom: 8px; }
 .img-lib-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 10px; max-height: 360px; overflow-y: auto;
@@ -577,6 +586,7 @@ body {
   <div class="modal modal-img">
     <h3>📂 管理圖片</h3>
     <div id="img-lib-tabs" class="img-lib-tabs"></div>
+    <div id="img-lib-lang-tabs" class="img-lib-lang-tabs" style="display:none;"></div>
     <div id="img-lib-grid" class="img-lib-grid"></div>
     <div id="img-lib-empty" class="img-lib-empty" style="display:none;">此分類尚無圖片</div>
     <div id="img-lib-loading" class="img-lib-loading">載入中…</div>
@@ -990,16 +1000,9 @@ function renderList() {
 
       const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
 
-      // 取得各語系圖片 URL（相容舊格式）
-      const imgEntry = _imgCache[a.date];
-      const getImgUrl = (lang) => {
-        if (!imgEntry) return '';
-        if (typeof imgEntry === 'string') return imgEntry; // 舊格式相容
-        return imgEntry[lang] || imgEntry['ALL'] || '';
-      };
 
       const mkContent = (code, lang, val) => {
-        const imgUrl = escUrl(getImgUrl(lang));
+        const imgUrl = escUrl(_getImgUrl(a.date, lang));
         const imgHtml = imgUrl
           ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link">🖼 查看圖片</a>`
           : '<span class="lang-img-empty">尚無圖片</span>';
@@ -1292,6 +1295,7 @@ async function confirmSend() {
     content:     m.content,
     webhook:     m.webhook,
     channelName: m.typeName || '',
+    image:       _getImgUrl(pendingAnn.date, m.code),
   }));
 
   if (messages.length === 0) {
@@ -1321,7 +1325,7 @@ async function confirmSend() {
       date:     dateVal,
       sendTime: timeVal,
       type:     pendingAnn.type || '',
-      image:    _imgCache[pendingAnn.date] || '',
+      image:    _getImgUrl(pendingAnn.date, 'ALL'),
       messages,
     };
 
@@ -1667,16 +1671,21 @@ async function _doGenerateErolabs(ann, maint) {
     zip.file(lang.filename + '.doc', textToRtf(parts.join('\n')));
   }
 
-  const imageUrl = _imgCache[ann.date] || '';
-  if (imageUrl) {
+  const addedUrls = new Set();
+  for (const lang of langs) {
+    const imageUrl = _getImgUrl(ann.date, lang.code);
+    if (!imageUrl || addedUrls.has(imageUrl)) continue;
+    addedUrls.add(imageUrl);
     try {
       const imgRes = await fetch(imageUrl);
       if (!imgRes.ok) throw new Error('fetch failed');
       const imgBlob = await imgRes.blob();
       const ext = imageUrl.split('?')[0].split('.').pop().toLowerCase() || 'jpg';
-      zip.file(`活動圖片.${ext}`, imgBlob);
+      const allSame = langs.every(l => _getImgUrl(ann.date, l.code) === imageUrl);
+      const fname = (addedUrls.size === 1 && allSame) ? `活動圖片.${ext}` : `活動圖片_${lang.code}.${ext}`;
+      zip.file(fname, imgBlob);
     } catch {
-      zip.file('活動圖片連結.txt', imageUrl);
+      zip.file(`活動圖片連結_${lang.code}.txt`, imageUrl);
     }
   }
 
@@ -1739,6 +1748,28 @@ function _saveImgCache() {
   localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
 }
 
+// 取得指定語系的圖片 URL（相容舊格式）
+function _getImgUrl(annDate, lang) {
+  const entry = _imgCache[annDate];
+  if (!entry) return '';
+  if (typeof entry === 'string') return entry;
+  return entry[lang] || entry['ALL'] || '';
+}
+
+// 設定指定語系的圖片 URL
+function _setImgUrl(annDate, lang, url) {
+  if (!_imgCache[annDate] || typeof _imgCache[annDate] === 'string') {
+    const old = typeof _imgCache[annDate] === 'string' ? _imgCache[annDate] : '';
+    _imgCache[annDate] = old ? { ALL: old, TW: old, CN: old, JP: old, EN: old } : {};
+  }
+  if (lang === 'ALL') {
+    ['TW', 'CN', 'JP', 'EN'].forEach(l => { _imgCache[annDate][l] = url; });
+    _imgCache[annDate]['ALL'] = url;
+  } else {
+    _imgCache[annDate][lang] = url;
+  }
+}
+
 function _imgCacheIsValid() {
   const ts = localStorage.getItem('ann-img-cache-ts');
   if (!ts) return false;
@@ -1773,7 +1804,13 @@ async function _loadImgCacheFromGitHub() {
     );
     if (!res.ok) return;
     const json = await res.json();
-    Object.assign(_imgCache, json);
+    for (const [key, val] of Object.entries(json)) {
+      if (typeof val === 'object' && val !== null) {
+        _imgCache[key] = Object.assign(_imgCache[key] || {}, val);
+      } else {
+        _imgCache[key] = val;
+      }
+    }
     _saveImgCache();
     _markImgCacheFetched();
     if (allData.length) renderList();
@@ -1907,8 +1944,32 @@ async function openImgLibrary(cardId, annDate, annType, mmdd, lang) {
     }
   }
 
+  // 語系 tab（活動公告才顯示）
+  const langTabEl = document.getElementById('img-lib-lang-tabs');
+  if (langTabEl) {
+    if (!isMaint) {
+      const langs = ['ALL', 'TW', 'CN', 'JP', 'EN'];
+      langTabEl.style.display = 'flex';
+      langTabEl.innerHTML = langs.map(l => `
+        <button onclick="switchImgLangTab('${l}')" id="img-lib-lang-${l}"
+          class="img-lib-lang-btn${l === _imgLibLang ? ' active' : ''}">
+          ${l === 'ALL' ? '全部' : l}
+        </button>`).join('');
+    } else {
+      langTabEl.style.display = 'none';
+      langTabEl.innerHTML = '';
+    }
+  }
+
   _imgLibFolders = folders;
   switchImgLibTab(0);
+}
+
+function switchImgLangTab(lang) {
+  _imgLibLang = lang;
+  document.querySelectorAll('.img-lib-lang-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.id === 'img-lib-lang-' + lang);
+  });
 }
 
 function switchImgLangTab(lang) {
@@ -1953,7 +2014,13 @@ async function switchImgLibTab(idx) {
     }
 
     grid.style.display = 'grid';
-    const currentImg = _imgCache[_imgLibAnnDate] || '';
+    const _getImgForLib = () => {
+      const entry = _imgCache[_imgLibAnnDate];
+      if (!entry) return '';
+      if (typeof entry === 'string') return entry;
+      return entry[_imgLibLang] || entry['ALL'] || '';
+    };
+    const currentImg = _getImgForLib();
     grid.innerHTML = imgs.map(img => {
       const safeUrl  = escUrl(img.url);
       const safeName = escHtml(img.name);
@@ -2001,16 +2068,14 @@ function selectImgFromLibrary(url, name) {
 
 async function applySelectedImg() {
   if (!_imgLibSelectedUrl) return;
-  _imgCache[_imgLibAnnDate] = _imgLibSelectedUrl;
+  _setImgUrl(_imgLibAnnDate, _imgLibLang, _imgLibSelectedUrl);
   _saveImgCache();
   const synced = await _syncImgCacheToGitHub();
-  _updateCardImgPreview(_imgLibCardId, _imgLibSelectedUrl);
   closeImgLibrary();
-  if (synced) {
-    toast('✅ 已套用圖片');
-  } else {
-    toast('⚠️ 已套用圖片，但同步失敗，其他裝置可能看不到');
-  }
+  renderList();
+  toast(synced
+    ? `✅ 已套用圖片到 ${_imgLibLang === 'ALL' ? '全部語系' : _imgLibLang}`
+    : '⚠️ 已套用圖片，但同步失敗，其他裝置可能看不到');
 }
 
 // 選檔後顯示預覽，不立即上傳
@@ -2066,7 +2131,8 @@ async function confirmUploadImg() {
   const folderIdx = _currentTabIdx;
   const folder    = _imgLibFolders[folderIdx]?.folder || _imgFolder(_imgLibAnnType, _imgLibMmdd);
 
-  const safeName = _uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const ext      = _uploadFile.name.split('.').pop().replace(/[^a-zA-Z0-9]/g, '') || 'png';
+  const safeName = `${_imgLibMmdd}_${_imgLibLang}.${ext}`;
   const path     = `${folder}/${safeName}`;
 
   const base64 = await new Promise((res, rej) => {
@@ -2078,26 +2144,25 @@ async function confirmUploadImg() {
 
   try {
     const rawUrl = await _githubPut(token, path, base64);
-    // 自動套用到此公告
-    _imgCache[_imgLibAnnDate] = rawUrl;
+    _setImgUrl(_imgLibAnnDate, _imgLibLang, rawUrl);
     _saveImgCache();
     const synced = await _syncImgCacheToGitHub();
-    _updateCardImgPreview(_imgLibCardId, rawUrl);
     statusEl.textContent = '✅ 上傳成功，已自動套用';
     // 直接把新圖插入 grid，不等 GitHub CDN 快取更新
     const grid = document.getElementById('img-lib-grid');
     const empty = document.getElementById('img-lib-empty');
     if (grid) {
-      const safeUrl  = escUrl(rawUrl);
-      const safeName = escHtml(_uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, '_'));
+      const safeUrl      = escUrl(rawUrl);
+      const displayName  = escHtml(safeName);
       const newThumb = document.createElement('div');
-      newThumb.className = 'img-lib-thumb';
-      newThumb.innerHTML = `<img src="${safeUrl}" loading="lazy"><div class="img-lib-name" title="${safeName}">${safeName}</div>`;
-      newThumb.onclick = () => selectImgFromLibrary(safeUrl, safeName);
+      newThumb.className = 'img-lib-thumb selected';
+      newThumb.innerHTML = `<img src="${safeUrl}" loading="lazy"><div class="img-lib-name" title="${displayName}">${displayName}</div>`;
+      newThumb.onclick = () => selectImgFromLibrary(safeUrl, displayName);
       grid.style.display = 'grid';
       if (empty) empty.style.display = 'none';
       grid.prepend(newThumb);
     }
+    renderList();
     clearUploadPreview();
     if (!synced) toast('⚠️ 上傳成功，但同步失敗，其他裝置可能看不到');
   } catch (e) {
@@ -2148,7 +2213,7 @@ Object.assign(window, {
   loadSettings, toggleTestMode, saveSettings, exportSettings, importSettings,
   markCfgUnsaved, addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
-  openImgLibrary, switchImgLibTab, selectImgFromLibrary, applySelectedImg,
+  openImgLibrary, switchImgLibTab, switchImgLangTab, selectImgFromLibrary, applySelectedImg,
   previewUploadFile, clearUploadPreview, confirmUploadImg, closeImgLibrary,
   syncImgCache, deleteSchedule,
 });
