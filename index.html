@@ -395,7 +395,7 @@ body {
           <option value="past">過去</option>
         </select>
         <button class="btn btn-outline btn-sm" onclick="loadSheet()">↻ 重新整理</button>
-        <button class="btn btn-outline btn-sm" id="btn-sync-img" onclick="syncImgCache()">🖼 同步圖片</button>
+        <button class="btn btn-outline btn-sm" id="btn-sync-img" onclick="syncImgCache()" disabled>🖼 同步圖片</button>
       </div>
 
       <div id="list-area">
@@ -731,8 +731,9 @@ async function loadSheet() {
 
     document.getElementById('list-updated').textContent =
       `上次更新：${new Date().toLocaleString('zh-TW')}`;
+    document.getElementById('btn-sync-img').disabled = false;
     renderList();
-    if (!_imgCacheIsValid()) _loadImgCacheFromGitHub();
+    _loadImgCacheFromGitHub();
   } catch (e) {
     document.getElementById('list-area').innerHTML =
       `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;color:#991b1b;font-size:0.85rem;">
