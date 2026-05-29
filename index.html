@@ -182,11 +182,6 @@
     <div id="img-lib-grid" class="img-lib-grid"></div>
     <div id="img-lib-empty" class="img-lib-empty" style="display:none;">此分類尚無圖片</div>
     <div id="img-lib-loading" class="img-lib-loading">載入中…</div>
-    <!-- 選取預覽 -->
-    <div id="img-lib-preview" class="img-lib-selected-preview" style="display:none;">
-      <img id="img-lib-preview-img" src="">
-      <span id="img-lib-preview-name" class="img-lib-selected-name"></span>
-    </div>
     <!-- 上傳區塊 -->
     <div class="img-lib-upload-area" id="img-lib-upload-area" style="display:none;">
       <div class="img-lib-upload-preview" id="img-lib-upload-preview" style="display:none;">
@@ -204,9 +199,8 @@
       <div id="img-lib-upload-status" class="img-lib-upload-status"></div>
     </div>
     <div class="modal-footer modal-footer-sm">
-      <button class="btn btn-outline" onclick="closeImgLibrary()">取消</button>
       <button class="btn btn-outline btn-sm" id="btn-img-lib-upload" onclick="confirmUploadImg()" style="display:none;" disabled>⬆ 確認上傳</button>
-      <button class="btn btn-primary" id="btn-img-lib-apply" onclick="applySelectedImg()" disabled>套用選取的圖片</button>
+      <button class="btn btn-primary" onclick="closeImgLibrary()">完成</button>
     </div>
   </div>
 </div>
@@ -1456,8 +1450,9 @@ async function clearAnnImg(annDate, annType, lang) {
     if (lang === 'ALL') ['TW','CN','JP','EN'].forEach(l => delete _imgCache[key][l]);
   }
   _saveImgCache();
-  await _syncImgCacheToGitHub();
   renderList();
+  // 背景同步，不等待
+  _syncImgCacheToGitHub();
 }
 
 async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
@@ -1512,7 +1507,6 @@ function _updateCardImgPreview(cardId, url) {
 let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibLang = 'TW';
 let _imgLibCurrentFolder = 'images';
 let _isLoadingImgLib = false;
-let _imgLibSelectedUrl = '';
 let _uploadFile = null;
 let _imgLibDirMemory = {}; // annDate_annType → 上次瀏覽的資料夾
 let _imgLibDirty = false;  // 是否有套用尚未同步
@@ -1535,12 +1529,12 @@ async function openImgLibrary(cardId, annDate, annType, mmdd, lang) {
   _imgLibCardId      = cardId;
   _imgLibAnnDate     = annDate;
   _imgLibAnnType     = annType;
-  _imgLibLang        = (lang && lang !== 'ALL') ? lang : 'TW';
-  _imgLibSelectedUrl = '';
-  _imgLibDirty       = false;
+  _imgLibLang  = (lang && lang !== 'ALL') ? lang : 'TW';
+  _imgLibDirty = false;
 
   // 記住上次瀏覽位置，沒有就從根目錄開始
   _imgLibCurrentFolder = _imgLibDirMemory[_imgLibMemKey()] || 'images';
+  _imgLibDirty = false;
 
   document.getElementById('modal-img-library').classList.add('open');
   document.getElementById('img-lib-upload-area').style.display = 'block';
@@ -1561,19 +1555,16 @@ async function _imgLibLoadFolder(folder) {
   if (_isLoadingImgLib) return;
   _isLoadingImgLib     = true;
   _imgLibCurrentFolder = folder;
-  _imgLibSelectedUrl   = '';
-  _imgLibDirMemory[_imgLibMemKey()] = folder; // 記住此公告的瀏覽位置
+  _imgLibDirMemory[_imgLibMemKey()] = folder;
 
-  const grid     = document.getElementById('img-lib-grid');
-  const empty    = document.getElementById('img-lib-empty');
-  const loading  = document.getElementById('img-lib-loading');
-  const applyBtn = document.getElementById('btn-img-lib-apply');
+  const grid    = document.getElementById('img-lib-grid');
+  const empty   = document.getElementById('img-lib-empty');
+  const loading = document.getElementById('img-lib-loading');
 
   grid.style.display    = 'none';
   empty.style.display   = 'none';
   loading.style.display = 'block';
   loading.textContent   = '載入中…';
-  if (applyBtn) applyBtn.disabled = true;
 
   const token = getCfg().githubToken;
   if (!token) { loading.textContent = '請先在設定頁填入 GitHub Token'; _isLoadingImgLib = false; return; }
@@ -1614,12 +1605,14 @@ async function _imgLibLoadFolder(folder) {
     grid.style.display = 'block';
     grid.innerHTML = `${backHtml}${dirHtml}<div class="img-lib-img-grid">${imgHtml}</div>`;
 
+    // highlight 已套用的圖
     if (currentImg) {
-      const activeThumb = [...grid.querySelectorAll('.img-lib-thumb')].find(el => {
+      grid.querySelectorAll('.img-lib-thumb').forEach(el => {
         const img = el.querySelector('img');
-        return img && img.src.split('?')[0] === escUrl(currentImg).split('?')[0];
+        if (img && img.src.split('?')[0] === escUrl(currentImg).split('?')[0]) {
+          el.classList.add('selected');
+        }
       });
-      if (activeThumb) { _imgLibSelectedUrl = currentImg; if (applyBtn) applyBtn.disabled = false; }
     }
   } catch(e) {
     loading.style.display = 'block';
@@ -1630,30 +1623,14 @@ async function _imgLibLoadFolder(folder) {
 }
 
 function selectImgFromLibrary(url, name) {
-  _imgLibSelectedUrl = url;
-  // 高亮選取的縮圖
-  document.querySelectorAll('.img-lib-thumb').forEach(el => el.classList.remove('selected'));
-  event.currentTarget.classList.add('selected');
-  // 顯示預覽
-  const preview = document.getElementById('img-lib-preview');
-  const previewImg = document.getElementById('img-lib-preview-img');
-  const previewName = document.getElementById('img-lib-preview-name');
-  previewImg.src = url;
-  previewName.textContent = name || '';
-  preview.style.display = 'flex';
-  // 啟用套用按鈕
-  document.getElementById('btn-img-lib-apply').disabled = false;
-}
-
-function applySelectedImg() {
-  if (!_imgLibSelectedUrl) return;
-  _setImgUrl(_imgLibAnnDate, _imgLibLang, _imgLibSelectedUrl, _imgLibAnnType);
+  // 點圖即套用到當前語系
+  _setImgUrl(_imgLibAnnDate, _imgLibLang, url, _imgLibAnnType);
   _saveImgCache();
   _imgLibDirty = true;
-  _imgLibRenderLangTabs(); // 更新圓點
-  toast(`✅ 已套用圖片到 ${_imgLibLang}`);
-  // 重新載入以更新 highlight
-  _imgLibLoadFolder(_imgLibCurrentFolder);
+  document.querySelectorAll('.img-lib-thumb').forEach(el => el.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  _imgLibRenderLangTabs();
+  toast(`✅ 已套用到 ${_imgLibLang}`);
 }
 
 // 選檔後顯示預覽，不立即上傳
@@ -1689,7 +1666,7 @@ function clearUploadPreview() {
   const input       = document.getElementById('img-lib-upload-input');
   if (previewWrap) previewWrap.style.display = 'none';
   if (uploadLabel) uploadLabel.style.display = 'inline-flex';
-  if (uploadBtn)   { uploadBtn.style.display = 'none'; uploadBtn.disabled = true; }
+  if (uploadBtn)   { uploadBtn.style.display = 'none'; uploadBtn.disabled = true; uploadBtn.textContent = '⬆ 確認上傳'; }
   if (input)       input.value = '';
   const fnInput = document.getElementById('img-lib-upload-filename');
   if (fnInput) fnInput.value = '';
@@ -1749,12 +1726,7 @@ async function confirmUploadImg() {
 }
 
 async function closeImgLibrary() {
-  _imgLibSelectedUrl = '';
-  _uploadFile        = null;
-  const preview = document.getElementById('img-lib-preview');
-  if (preview) preview.style.display = 'none';
-  const applyBtn = document.getElementById('btn-img-lib-apply');
-  if (applyBtn) applyBtn.disabled = true;
+  _uploadFile = null;
   clearUploadPreview();
   document.getElementById('modal-img-library').classList.remove('open');
   renderList();
@@ -1795,7 +1767,7 @@ Object.assign(window, {
   loadSettings, toggleTestMode, saveSettings, exportSettings, importSettings,
   markCfgUnsaved, addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
-  openImgLibrary, _imgLibLoadFolder, switchImgLangTab, selectImgFromLibrary, applySelectedImg,
+  openImgLibrary, _imgLibLoadFolder, switchImgLangTab, selectImgFromLibrary,
   previewUploadFile, clearUploadPreview, confirmUploadImg, closeImgLibrary,
   syncImgCache, deleteSchedule, clearAnnImg,
 });
