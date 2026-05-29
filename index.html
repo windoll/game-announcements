@@ -165,7 +165,6 @@ body {
 }
 .time-input-row input[type=time]:focus { border-color: #a5b4fc; }
 
-
 /* ── 通知 toast ── */
 #toast {
   position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px);
@@ -227,6 +226,14 @@ body {
 }
 .lock-box input:focus { border-color: #4f46e5; }
 .lock-box .lock-error { font-size: 0.82rem; color: #ef4444; margin-bottom: 10px; min-height: 18px; }
+
+/* ── 排程狀態標籤 ── */
+.scheduled-badge {
+  font-size: 0.72rem; font-weight: 600;
+  background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd;
+  padding: 2px 8px; border-radius: 20px; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 3px;
+}
 </style>
 </head>
 <body>
@@ -364,7 +371,6 @@ body {
         <button class="btn btn-primary" onclick="saveSettings()">💾 儲存設定</button>
         <button class="btn btn-outline" onclick="exportSettings()">📤 匯出設定</button>
         <label class="btn btn-outline" style="cursor:pointer;">📥 匯入設定<input type="file" accept=".json" style="display:none;" onchange="importSettings(event)"></label>
-
       </div>
     </div>
 
@@ -457,39 +463,32 @@ body {
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
-// ── 預設設定（可在設定頁覆蓋，存於 localStorage）─────────────
+(function () {
+'use strict';
+
+// ══ MODULE: CONFIG ══════════════════════════════════════════════
+
 const DEFAULTS = {
   projectName: '公告管理',
   sheetId:     '',
   sheetGid:    '',
   announcementTypes: [
-    {
-      name: '維護更新',
-      langs: [{ lang: 'all', webhook: '' }]
-    },
-    {
-      name: '活動公告',
-      langs: [
-        { lang: 'TW', webhook: '' },
-        { lang: 'JP', webhook: '' },
-        { lang: 'EN', webhook: '' },
-      ]
-    }
+    { name: '維護更新',  langs: [{ lang: 'all', webhook: '' }] },
+    { name: '活動公告',  langs: [{ lang: 'TW', webhook: '' }, { lang: 'JP', webhook: '' }, { lang: 'EN', webhook: '' }] }
   ],
   testAnnouncementTypes: [],
   testMode: false,
   githubToken: '',
 };
-const PAGE_PASSWORD_HASH  = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
-const SECRET_TOKEN        = 'zx9k-Q7mP-4rNw-Hj2T';
-const N8N_WEBHOOK_PROD    = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
-const N8N_WEBHOOK_TEST    = 'https://charlie98783.app.n8n.cloud/webhook-test/send-announcement';
-function N8N_WEBHOOK() { return getCfg().testMode ? N8N_WEBHOOK_TEST : N8N_WEBHOOK_PROD; }
 
-// ── 從 localStorage 讀取設定 ──────────────────────────────────
-function escHtml(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
+const SECRET_TOKEN       = 'zx9k-Q7mP-4rNw-Hj2T';
+const N8N_WEBHOOK_PROD   = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
+const N8N_WEBHOOK_TEST   = 'https://charlie98783.app.n8n.cloud/webhook-test/send-announcement';
+
+function N8N_WEBHOOK() { return getCfg().testMode ? N8N_WEBHOOK_TEST : N8N_WEBHOOK_PROD; }
+function SHEET_ID()    { return getCfg().sheetId; }
+function SHEET_GID()   { return getCfg().sheetGid; }
 
 function getCfg() {
   try {
@@ -498,19 +497,37 @@ function getCfg() {
   } catch { return { ...DEFAULTS }; }
 }
 
-// 動態常數（讀自設定）
-function SHEET_ID()  { return getCfg().sheetId; }
-function SHEET_GID() { return getCfg().sheetGid; }
+// ══ MODULE: UTILS ═══════════════════════════════════════════════
 
-// ── 密碼鎖 ────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// 允許合法 https URL，拒絕 javascript: 等危險協定
+function escUrl(s) {
+  const str = String(s || '');
+  return /^https?:\/\//i.test(str) ? escHtml(str) : '';
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ══ MODULE: AUTH ════════════════════════════════════════════════
+
 async function checkPassword() {
   const input = document.getElementById('lock-input').value;
   if (!input) return;
 
-  // SHA-256 hash 比對
-  const msgBuffer = new TextEncoder().encode(input);
+  const msgBuffer  = new TextEncoder().encode(input);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
+  const hashHex    = Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
 
   if (hashHex === PAGE_PASSWORD_HASH) {
     sessionStorage.setItem('unlocked', '1');
@@ -524,19 +541,19 @@ async function checkPassword() {
   }
 }
 
-// 頁面載入時檢查是否已解鎖（同一 session 內不用重新輸入）
-(function() {
-  if (sessionStorage.getItem('unlocked') === '1') {
-    document.getElementById('lock-screen').style.display = 'none';
-    document.getElementById('main-app').style.display = '';
-  }
-})();
+// 統一初始化入口（解鎖後或 session 已解鎖時呼叫）
+function initApp() {
+  applyTestModeUI(!!getCfg().testMode);
+  _loadImgCacheFromGitHub();
+}
 
-// ── 狀態 ──────────────────────────────────────────────────────
-let allData = [];
-let pendingAnn = null; // 待確認發送的公告
+// ══ MODULE: STATE ════════════════════════════════════════════════
 
-// ── 頁面切換 ──────────────────────────────────────────────────
+let allData    = [];
+let pendingAnn = null;
+
+// ══ MODULE: NAV ══════════════════════════════════════════════════
+
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -545,8 +562,14 @@ function showPage(name) {
   if (name === 'settings') loadSettings();
 }
 
-// ── 讀取試算表 ────────────────────────────────────────────────
+// ══ MODULE: SHEET ════════════════════════════════════════════════
+
+let _isLoadingSheet = false; // 防重複點擊
+
 async function loadSheet() {
+  if (_isLoadingSheet) return;
+  _isLoadingSheet = true;
+
   document.getElementById('list-area').innerHTML = '<div class="loading">⏳ 正在讀取試算表...</div>';
   document.getElementById('list-updated').textContent = '載入中...';
 
@@ -574,25 +597,20 @@ async function loadSheet() {
       titleEN:   headers.indexOf('英文標題'),
       contentEN: headers.indexOf('英文內容'),
     };
-    // fallback 位置（無簡中欄位時維持 -1，後續自動跳過）
     if (ix.date === -1) Object.assign(ix, {date:0,time:1,type:2,image:3,titleTW:4,contentTW:5,titleCN:-1,contentCN:-1,titleJP:6,contentJP:7,titleEN:8,contentEN:9});
 
-    // gviz 日期欄位傳回 "Date(yyyy,m,d)" (月份 0-based)
-    // gviz 時間欄位傳回 "Date(1899,11,30,h,min,s)"
     const getDate = (row, i) => {
       if (i < 0 || !row.c || !row.c[i] || row.c[i].v === null) return '';
       const v = String(row.c[i].v);
       const m = v.match(/Date\((\d+),(\d+),(\d+)/);
-      if (m) return `${parseInt(m[2])+1}/${m[3]}`; // 轉成 M/D
+      if (m) return `${parseInt(m[2])+1}/${m[3]}`;
       return v;
     };
     const getTime = (row, i) => {
       if (i < 0 || !row.c || !row.c[i] || row.c[i].v === null) return '';
       const v = String(row.c[i].v);
-      // gviz 時間格式 "Date(1899,11,30,h,min,s)"
       const m = v.match(/Date\(\d+,\d+,\d+,(\d+),(\d+)/);
       if (m) return `${m[1].padStart(2,'0')}:${m[2].padStart(2,'0')}`;
-      // 純數字（小數，代表一天的比例）
       if (!isNaN(v) && v !== '') {
         const totalMin = Math.round(parseFloat(v) * 24 * 60);
         const h = Math.floor(totalMin / 60), min = totalMin % 60;
@@ -602,17 +620,17 @@ async function loadSheet() {
     };
     const get = (row, i) => {
       if (i < 0 || !row.c || !row.c[i] || row.c[i].v === null) return '';
-      return String(row.c[i].f ?? row.c[i].v); // 優先用格式化值 f
+      return String(row.c[i].f ?? row.c[i].v);
     };
 
     allData = (tbl.rows || [])
       .map(row => ({
         date: getDate(row, ix.date), time: getTime(row, ix.time),
-        type: get(row, ix.type), image: get(row, ix.image),
-        titleTW: get(row, ix.titleTW), contentTW: get(row, ix.contentTW),
-        titleCN: get(row, ix.titleCN), contentCN: get(row, ix.contentCN),
-        titleJP: get(row, ix.titleJP), contentJP: get(row, ix.contentJP),
-        titleEN: get(row, ix.titleEN), contentEN: get(row, ix.contentEN),
+        type: get(row, ix.type),     image: get(row, ix.image),
+        titleTW: get(row, ix.titleTW),   contentTW: get(row, ix.contentTW),
+        titleCN: get(row, ix.titleCN),   contentCN: get(row, ix.contentCN),
+        titleJP: get(row, ix.titleJP),   contentJP: get(row, ix.contentJP),
+        titleEN: get(row, ix.titleEN),   contentEN: get(row, ix.contentEN),
       }))
       .filter(a => a.date && a.date !== '日期' && a.titleTW && a.titleTW !== '...');
 
@@ -622,23 +640,39 @@ async function loadSheet() {
   } catch (e) {
     document.getElementById('list-area').innerHTML =
       `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;color:#991b1b;font-size:0.85rem;">
-        ⚠️ 無法讀取試算表：${e.message}<br>
+        ⚠️ 無法讀取試算表：${escHtml(e.message)}<br>
         請確認試算表已設為「任何知道連結的人都可以檢視」。
       </div>`;
     document.getElementById('list-updated').textContent = '讀取失敗';
+  } finally {
+    _isLoadingSheet = false;
   }
 }
 
-// ── 日期工具 ──────────────────────────────────────────────────
+// ══ MODULE: DATE UTILS ═══════════════════════════════════════════
+
+/**
+ * 解析 "M/D" 格式日期。
+ * 跨年處理：若公告月份與當前月份差距超過 6 個月，
+ * 自動判斷屬於上一年或下一年，避免跨年排序錯誤。
+ */
 function parseDate(d, t) {
   if (!d) return null;
-  const y = new Date().getFullYear();
   const parts = String(d).split('/').map(Number).filter(Boolean);
   if (parts.length < 2) return null;
   const [m, day] = parts.length === 2 ? parts : [parts[1], parts[2]];
   const hm = String(t || '').match(/(\d{1,2}):(\d{2})/);
-  return new Date(y, m-1, day, hm ? +hm[1] : 0, hm ? +hm[2] : 0);
+
+  const now = new Date();
+  let year = now.getFullYear();
+  const monthDiff = m - (now.getMonth() + 1);
+  // 差距超過 6 個月 → 跨年（如現在 1 月，公告 12 月 → 屬於去年）
+  if (monthDiff > 6)  year -= 1;
+  if (monthDiff < -6) year += 1;
+
+  return new Date(year, m - 1, day, hm ? +hm[1] : 0, hm ? +hm[2] : 0);
 }
+
 function getStatus(dt) {
   if (!dt || isNaN(dt)) return 'past';
   const now   = new Date();
@@ -647,6 +681,7 @@ function getStatus(dt) {
   if (+cday === +today) return 'today';
   return dt > now ? 'upcoming' : 'past';
 }
+
 function badgeClass(type) {
   if (!type) return 'badge-other';
   if (type.includes('完成')) return 'badge-done';
@@ -654,11 +689,37 @@ function badgeClass(type) {
   if (type.includes('活動')) return 'badge-event';
   return 'badge-other';
 }
-const borderColor = {today:'#10b981', upcoming:'#f59e0b', past:'#e0e0e0'};
-const statusOrder = {upcoming:0, today:1, past:2};
-const statusLabel = {today:'📅 今日', upcoming:'⏰ 未來排程', past:'✓ 已過期'};
 
-// ── 渲染列表 ──────────────────────────────────────────────────
+const borderColor = { today: '#10b981', upcoming: '#f59e0b', past: '#e0e0e0' };
+const statusOrder = { upcoming: 0, today: 1, past: 2 };
+const statusLabel = { today: '📅 今日', upcoming: '⏰ 未來排程', past: '✓ 已過期' };
+
+// ══ MODULE: SCHEDULE STORE ═══════════════════════════════════════
+// 存放已排程記錄，key = ann.date，value = [{ sendDate, sendTime, typeName }]
+
+function _getSchedules() {
+  try { return JSON.parse(localStorage.getItem('ann-schedules') || '{}'); } catch { return {}; }
+}
+
+function _saveSchedule(annDate, sendDate, sendTime, typeName) {
+  const all = _getSchedules();
+  if (!all[annDate]) all[annDate] = [];
+  // 避免重複記錄相同 sendDate+sendTime
+  const dup = all[annDate].find(r => r.sendDate === sendDate && r.sendTime === sendTime);
+  if (!dup) all[annDate].push({ sendDate, sendTime, typeName, createdAt: new Date().toISOString() });
+  localStorage.setItem('ann-schedules', JSON.stringify(all));
+}
+
+function _getScheduleBadgesHtml(annDate) {
+  const records = (_getSchedules()[annDate]) || [];
+  if (!records.length) return '';
+  return records.map(r =>
+    `<span class="scheduled-badge">✈️ ${escHtml(r.sendDate)} ${escHtml(r.sendTime)}${r.typeName ? ' · ' + escHtml(r.typeName) : ''}</span>`
+  ).join(' ');
+}
+
+// ══ MODULE: RENDER LIST ══════════════════════════════════════════
+
 function renderList() {
   const q  = (document.getElementById('q').value || '').toLowerCase();
   const tf = document.getElementById('tf').value;
@@ -675,7 +736,7 @@ function renderList() {
     const da = parseDate(a.date, a.time), db = parseDate(b.date, b.time);
     const sa = getStatus(da), sb = getStatus(db);
     if (statusOrder[sa] !== statusOrder[sb]) return statusOrder[sa] - statusOrder[sb];
-    return (+db||0) - (+da||0);
+    return (+db || 0) - (+da || 0);
   });
 
   // 統計
@@ -701,7 +762,7 @@ function renderList() {
   });
 
   let html = '';
-  ['upcoming','today','past'].forEach(s => {
+  ['upcoming', 'today', 'past'].forEach(s => {
     if (!groups[s]?.length) return;
     html += `<div class="sec-label">${statusLabel[s]}（${groups[s].length}）</div>`;
     groups[s].forEach((a, i) => {
@@ -709,8 +770,9 @@ function renderList() {
       const st = getStatus(parseDate(a.date, a.time));
       const bc = borderColor[st];
       const dateDisplay = a.date + (a.time ? ' ' + a.time : '');
+
       const mkCheck = (code, val) => val
-        ? `<div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span><span class="lang-title-text">${val}</span></div>`
+        ? `<div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span><span class="lang-title-text">${escHtml(val)}</span></div>`
         : `<div class="lang-row"><span class="lang-check lang-no">${code} ✗</span><span class="lang-title-text lang-empty">未填寫</span></div>`;
       const langTags =
         '<hr class="lang-divider">' +
@@ -718,14 +780,12 @@ function renderList() {
         mkCheck('CN', a.titleCN) +
         mkCheck('JP', a.titleJP) +
         mkCheck('EN', a.titleEN);
-      const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
 
-      // 預設發送時間（試算表時間）
+      const isDraft    = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
       const defaultTime = a.time || '10:00';
 
-      // 展開內容區
       const mkContent = (code, val) => val
-        ? `<div class="content-block"><div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span></div><div class="content-text">${val}</div></div>`
+        ? `<div class="content-block"><div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span></div><div class="content-text">${escHtml(val)}</div></div>`
         : `<div class="content-block"><div class="lang-row"><span class="lang-check lang-no">${code} ✗</span></div></div>`;
       let contentHtml = '';
       if (!isDraft) {
@@ -748,40 +808,55 @@ function renderList() {
           if (sParts.length === 2) {
             const sM = parseInt(sParts[0], 10), sD = parseInt(sParts[1], 10);
             if (cM !== sM || cD !== sD) {
-              cardDateWarn = `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:6px 10px;margin:6px 0 2px;font-size:0.78rem;color:#92400e;">⚠️ <strong>日期不符</strong>：Sheet 日期 <strong>${a.date}</strong>，內文維護時間為 <strong>${cM}/${cD}</strong></div>`;
+              cardDateWarn = `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:6px 10px;margin:6px 0 2px;font-size:0.78rem;color:#92400e;">⚠️ <strong>日期不符</strong>：Sheet 日期 <strong>${escHtml(a.date)}</strong>，內文維護時間為 <strong>${cM}/${cD}</strong></div>`;
             }
           }
         }
       }
 
+      // 圖片預覽（escUrl 防 XSS）
+      const imgUrl        = escUrl(_imgCache[a.date] || (a.image && a.image !== '...' ? a.image : ''));
+      const imgPreviewHtml = imgUrl
+        ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>`
+        : '<span style="color:#bbb;">尚無圖片</span>';
+
+      // 排程狀態標籤
+      const scheduleBadges = _getScheduleBadgesHtml(a.date);
+
+      const annJson  = escHtml(JSON.stringify(a));
+      const safeType = escHtml((a.type || '').replace(/'/g, ''));
+      const safeMmdd = escHtml((a.date || '').replace(/\//g, ''));
+      const safeDate = escHtml(a.date || '');
+
       html += `
 <div class="ann-card" id="card-${id}" style="border-left-color:${bc}" onclick="toggleCard('${id}')">
   <div class="ann-top">
     <span class="dot dot-${st}"></span>
-    <span class="ann-date">${dateDisplay}</span>
-    ${a.type ? `<span class="badge ${badgeClass(a.type)}">${a.type}</span>` : ''}
+    <span class="ann-date">${escHtml(dateDisplay)}</span>
+    ${a.type ? `<span class="badge ${badgeClass(a.type)}">${escHtml(a.type)}</span>` : ''}
     ${isDraft ? '<span style="font-size:0.72rem;color:#bbb;margin-left:auto;">草稿</span>' : ''}
     ${!isDraft ? '<span class="expand-arrow">▼</span>' : ''}
   </div>
-  <div class="ann-title">${a.titleTW || '（無標題）'}</div>
+  <div class="ann-title">${escHtml(a.titleTW || '（無標題）')}</div>
   ${cardDateWarn}
   ${langTags}
+  ${scheduleBadges ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">${scheduleBadges}</div>` : ''}
   <div style="margin-top:5px;font-size:0.75rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;" onclick="event.stopPropagation()">
-    <span id="img-preview-${id}">${(_imgCache[a.date] || (a.image && a.image !== '...')) ? `<a href="${_imgCache[a.date] || a.image}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>` : '<span style="color:#bbb;">尚無圖片</span>'}</span>
-    <button onclick="openImgLibrary('${id}','${a.date}','${(a.type||'').replace(/'/g,'')}','${(a.date||'').replace(/\//g,'')}')" style="cursor:pointer;color:#6366f1;font-size:0.75rem;border:1px solid #6366f1;border-radius:6px;padding:2px 8px;background:white;white-space:nowrap;">📂 圖片庫</button>
+    <span id="img-preview-${id}">${imgPreviewHtml}</span>
+    <button onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}')" style="cursor:pointer;color:#6366f1;font-size:0.75rem;border:1px solid #6366f1;border-radius:6px;padding:2px 8px;background:white;white-space:nowrap;">📂 圖片庫</button>
     <label style="cursor:pointer;color:#6366f1;font-size:0.75rem;border:1px solid #6366f1;border-radius:6px;padding:2px 8px;white-space:nowrap;">
       ⬆ 上傳新圖
-      <input type="file" accept="image/*" style="display:none;" onchange="uploadImageToGitHub(event,'${id}','${a.date}','${(a.type||'').replace(/'/g,'')}','${(a.date||'').replace(/\//g,'')}')">
+      <input type="file" accept="image/*" style="display:none;" onchange="uploadImageToGitHub(event,'${id}','${safeDate}','${safeType}','${safeMmdd}')">
     </label>
     <span id="img-upload-status-${id}" style="color:#888;font-size:0.72rem;"></span>
   </div>
   ${contentHtml}
   ${!isDraft && st !== 'past' ? `
   <div class="ann-actions" onclick="event.stopPropagation()">
-    <button class="btn btn-green btn-sm" onclick="openSendModal(${JSON.stringify(a).replace(/"/g,'&quot;')}, '${defaultTime}')">
+    <button class="btn btn-green btn-sm" onclick="openSendModal(${annJson}, '${escHtml(defaultTime)}')">
       ✈️ 發送到 Discord
     </button>
-    ${a.type && a.type.includes('活動') ? `<button class="btn btn-outline btn-sm" onclick="buildErolabsDocs(${JSON.stringify(a).replace(/"/g,'&quot;')})">
+    ${a.type && a.type.includes('活動') ? `<button class="btn btn-outline btn-sm" onclick="buildErolabsDocs(${annJson})">
       📄 建立 Erolabs 公告
     </button>` : ''}
   </div>` : ''}
@@ -792,13 +867,13 @@ function renderList() {
   document.getElementById('list-area').innerHTML = html;
 }
 
-// ── 展開/收合卡片 ─────────────────────────────────────────────
 function toggleCard(id) {
   const card = document.getElementById('card-' + id);
   if (card) card.classList.toggle('open');
 }
 
-// ── 發送 Modal ────────────────────────────────────────────────
+// ══ MODULE: SEND MODAL ═══════════════════════════════════════════
+
 function openSendModal(ann, defaultTime) {
   pendingAnn = ann;
   const normalized = ann.date.replace(/^0?(\d+)\/0?(\d+)$/, '$1/$2');
@@ -812,19 +887,15 @@ function openSendModal(ann, defaultTime) {
   let contentStr = content.join('\n\n---\n\n');
   if (ann.image && ann.image !== '...') contentStr += '\n\n' + ann.image;
 
-  // 所有設定的公告類型（test mode 時用測試類型）
   const cfg = getCfg();
   const announcementTypes = (cfg.testMode ? cfg.testAnnouncementTypes : cfg.announcementTypes) || [];
   const annType = ann.type || '';
 
-  // 模糊比對預設選中的類型 index
   let defaultTypeIdx = announcementTypes.findIndex(t => annType.includes(t.name) || t.name.includes(annType));
   if (defaultTypeIdx < 0) defaultTypeIdx = 0;
 
-  // 儲存公告內容供 renderModalLangs 和 confirmSend 使用
   window._modalAnn = ann;
 
-  // 渲染類型 radio
   if (!announcementTypes.length) {
     document.getElementById('modal-type-radios').innerHTML =
       '<div style="color:#ef4444;font-size:0.85rem;">⚠️ 尚未設定任何頻道類型，請先至設定頁新增</div>';
@@ -844,22 +915,15 @@ function openSendModal(ann, defaultTime) {
   document.getElementById('modal-thread').textContent = threadName;
   document.getElementById('modal-content').textContent = contentStr.substring(0, 300) + (contentStr.length > 300 ? '...' : '');
 
-  // 依公告類型決定預設時間和日期偏移
   let defaultH = '10', defaultM = '00', dateOffset = 0;
-  if (annType.includes('活動')) {
-    defaultH = '17'; defaultM = '00'; dateOffset = -1; // 前一天
-  } else if (annType.includes('維護預告')) {
-    defaultH = '09'; defaultM = '00'; dateOffset = 0;  // 當天
-  } else if (annType.includes('維護完成')) {
-    defaultH = '12'; defaultM = '30'; dateOffset = 0;  // 當天
-  }
+  if (annType.includes('活動'))         { defaultH = '17'; defaultM = '00'; dateOffset = -1; }
+  else if (annType.includes('維護預告')) { defaultH = '09'; defaultM = '00'; dateOffset = 0; }
+  else if (annType.includes('維護完成')) { defaultH = '12'; defaultM = '30'; dateOffset = 0; }
 
-  // 初始化日期 select：今天起往後 30 天（台灣時間）
   const _twToday = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-  const dateSel = document.getElementById('modal-date');
+  const dateSel  = document.getElementById('modal-date');
   dateSel.innerHTML = '';
 
-  // 計算目標預選日期（ann.date ± offset）
   const annDateParts = (ann.date || '').replace(/^0*(\d+)\/0*(\d+)$/, '$1/$2').split('/');
   let targetDate = null;
   if (annDateParts.length === 2) {
@@ -869,7 +933,7 @@ function openSendModal(ann, defaultTime) {
   }
 
   for (let i = 0; i < 30; i++) {
-    const d = new Date(_twToday);
+    const d  = new Date(_twToday);
     d.setDate(d.getDate() + i);
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
@@ -877,47 +941,41 @@ function openSendModal(ann, defaultTime) {
     const opt = document.createElement('option');
     opt.value = val;
     opt.textContent = val;
-    // 預選目標日期
     const isTarget = targetDate &&
       d.getMonth() === targetDate.getMonth() &&
-      d.getDate() === targetDate.getDate();
+      d.getDate()  === targetDate.getDate();
     if (isTarget || (!targetDate && i === 0)) opt.selected = true;
     dateSel.appendChild(opt);
   }
 
-  // 初始化時 select（00–23）
   const hourSel = document.getElementById('modal-time-h');
-  hourSel.innerHTML = Array.from({length:24},(_,h)=>`<option value="${String(h).padStart(2,'0')}">${String(h).padStart(2,'0')}</option>`).join('');
+  hourSel.innerHTML = Array.from({length:24}, (_, h) =>
+    `<option value="${String(h).padStart(2,'0')}">${String(h).padStart(2,'0')}</option>`).join('');
 
-  // 初始化分 select（00–59）
   const minSel = document.getElementById('modal-time-m');
-  minSel.innerHTML = Array.from({length:60},(_,i)=>`<option value="${String(i).padStart(2,'0')}">${String(i).padStart(2,'0')}</option>`).join('');
+  minSel.innerHTML = Array.from({length:60}, (_, i) =>
+    `<option value="${String(i).padStart(2,'0')}">${String(i).padStart(2,'0')}</option>`).join('');
 
-  // 預選時間（依類型預設）
-  hourSel.value = defaultH.padStart(2,'0');
-  minSel.value = defaultM.padStart(2,'0');
+  hourSel.value = defaultH.padStart(2, '0');
+  minSel.value  = defaultM.padStart(2, '0');
 
-  // 顯示現在台灣日期時間（24小時制）
   const _twNow = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
   document.getElementById('modal-now').textContent = _twNow.replace(',', ' ');
 
-  // ── 防呆：維護預告日期比對 ────────────────────────────────────
   const warnEl = document.getElementById('modal-date-warn');
   warnEl.style.display = 'none';
-  warnEl.textContent = '';
+  warnEl.textContent   = '';
   if (annType.includes('維護預告') && ann.contentTW) {
-    // 從 TW 內容抓 【維護時間】 後的日期
     const maintMatch = ann.contentTW.match(/維護時間[\s\S]*?(\d{4})年(\d{1,2})月(\d{1,2})日/);
     if (maintMatch) {
       const contentMonth = parseInt(maintMatch[2], 10);
       const contentDay   = parseInt(maintMatch[3], 10);
-      // ann.date 格式：M/D 或 MM/DD
-      const sheetParts = (ann.date || '').replace(/^0*(\d+)\/0*(\d+)$/, '$1/$2').split('/');
+      const sheetParts   = (ann.date || '').replace(/^0*(\d+)\/0*(\d+)$/, '$1/$2').split('/');
       if (sheetParts.length === 2) {
         const sheetMonth = parseInt(sheetParts[0], 10);
         const sheetDay   = parseInt(sheetParts[1], 10);
         if (contentMonth !== sheetMonth || contentDay !== sheetDay) {
-          warnEl.innerHTML = `⚠️ <strong>日期不符</strong>：Sheet 日期為 <strong>${ann.date}</strong>，但內文【維護時間】的日期為 <strong>${contentMonth}/${contentDay}</strong>，請確認是否正確。`;
+          warnEl.innerHTML = `⚠️ <strong>日期不符</strong>：Sheet 日期為 <strong>${escHtml(ann.date)}</strong>，但內文【維護時間】的日期為 <strong>${contentMonth}/${contentDay}</strong>，請確認是否正確。`;
           warnEl.style.display = 'block';
         }
       }
@@ -927,11 +985,10 @@ function openSendModal(ann, defaultTime) {
   document.getElementById('modal-send').classList.add('open');
 }
 
-// 根據選中的類型 index 渲染語系預覽，並更新 _modalMessages
 function renderModalLangs(typeIdx) {
   const cfg = getCfg();
   const announcementTypes = (cfg.testMode ? cfg.testAnnouncementTypes : cfg.announcementTypes) || [];
-  const t = announcementTypes[typeIdx];
+  const t   = announcementTypes[typeIdx];
   const ann = window._modalAnn || {};
   const langDefs = [
     { code: 'TW', title: ann.titleTW || '', content: ann.contentTW || '' },
@@ -939,17 +996,11 @@ function renderModalLangs(typeIdx) {
     { code: 'EN', title: ann.titleEN || '', content: ann.contentEN || '' },
   ];
 
-  // 更新 radio 樣式
   document.querySelectorAll('[name="modal-type"]').forEach((radio, i) => {
     const label = radio.closest('label');
     if (!label) return;
-    if (i === typeIdx) {
-      label.style.borderColor = '#6366f1';
-      label.style.background = '#f5f3ff';
-    } else {
-      label.style.borderColor = '#e5e7eb';
-      label.style.background = '';
-    }
+    label.style.borderColor = i === typeIdx ? '#6366f1' : '#e5e7eb';
+    label.style.background  = i === typeIdx ? '#f5f3ff' : '';
   });
 
   window._modalMessages = [];
@@ -962,35 +1013,24 @@ function renderModalLangs(typeIdx) {
   const hasAll = t.langs.some(l => l.lang === 'all');
   const rowsHtml = langDefs.map(({ code, title, content }) => {
     const hasContent = !!(title || content);
-    const langEntry = hasAll
-      ? t.langs.find(l => l.lang === 'all')
-      : t.langs.find(l => l.lang === code);
-    const webhook = langEntry ? langEntry.webhook : '';
+    const langEntry  = hasAll ? t.langs.find(l => l.lang === 'all') : t.langs.find(l => l.lang === code);
+    const webhook    = langEntry ? langEntry.webhook : '';
     const hasWebhook = !!webhook;
 
     if (hasContent && hasWebhook) {
       window._modalMessages.push({ code, title, content, webhook, typeName: t.name });
     }
 
-    let statusLabel, statusStyle;
-    if (!hasContent) {
-      statusLabel = '無內容，略過';
-      statusStyle = 'color:#aaa;';
-    } else if (!langEntry) {
-      statusLabel = '⚠️ 此類型未設定此語系';
-      statusStyle = 'color:#ef4444;';
-    } else if (!hasWebhook) {
-      statusLabel = '⚠️ Webhook 未填入';
-      statusStyle = 'color:#ef4444;';
-    } else {
-      statusLabel = '✓';
-      statusStyle = 'color:#16a34a;font-weight:700;';
-    }
+    let statusLbl, statusStyle;
+    if (!hasContent)      { statusLbl = '無內容，略過';           statusStyle = 'color:#aaa;'; }
+    else if (!langEntry)  { statusLbl = '⚠️ 此類型未設定此語系'; statusStyle = 'color:#ef4444;'; }
+    else if (!hasWebhook) { statusLbl = '⚠️ Webhook 未填入';     statusStyle = 'color:#ef4444;'; }
+    else                  { statusLbl = '✓';                      statusStyle = 'color:#16a34a;font-weight:700;'; }
 
     return `
     <div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
       <span style="width:28px;font-weight:700;font-size:0.85rem;color:#374151;">${code}</span>
-      <span style="flex:1;font-size:0.82rem;${statusStyle}">${statusLabel}</span>
+      <span style="flex:1;font-size:0.82rem;${statusStyle}">${statusLbl}</span>
     </div>`;
   }).join('');
 
@@ -1010,16 +1050,14 @@ async function confirmSend() {
   if (!dateVal || !hourVal || !minVal) { toast('⚠️ 請選擇發送日期與時間'); return; }
   const timeVal = hourVal + ':' + minVal;
 
-  // 防呆：選的時間不能早於現在台灣時間
   const [mm, dd] = dateVal.split('/');
-  const twNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-  const selectedTW = new Date(twNow.getFullYear(), parseInt(mm)-1, parseInt(dd), parseInt(hourVal), parseInt(minVal));
+  const twNow    = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+  const selectedTW = new Date(twNow.getFullYear(), parseInt(mm) - 1, parseInt(dd), parseInt(hourVal), parseInt(minVal));
   if (selectedTW <= twNow) {
     toast('⚠️ 發送時間已過，請選擇未來的時間');
     return;
   }
 
-  // 從 openSendModal 預先比對好的結果取得發送清單
   const messages = (window._modalMessages || []).map(m => ({
     lang:        m.code,
     title:       m.title,
@@ -1034,8 +1072,14 @@ async function confirmSend() {
   }
 
   const btn = document.getElementById('modal-confirm-btn');
-  btn.disabled = true;
+  btn.disabled    = true;
   btn.textContent = '發送中...';
+
+  // 取得目前選中的類型名稱
+  const cfg = getCfg();
+  const announcementTypes = (cfg.testMode ? cfg.testAnnouncementTypes : cfg.announcementTypes) || [];
+  const selectedTypeIdx   = parseInt(document.querySelector('[name="modal-type"]:checked')?.value ?? '0');
+  const typeName          = announcementTypes[selectedTypeIdx]?.name || '';
 
   try {
     const payload = {
@@ -1056,36 +1100,30 @@ async function confirmSend() {
     const text = await res.text();
     const data = text ? JSON.parse(text) : {};
 
+    // 儲存排程記錄，並重新渲染以顯示標籤
+    _saveSchedule(pendingAnn.date, dateVal, timeVal, typeName);
     closeModal();
     toast(`✅ 排程已設定！將於 ${dateVal} ${timeVal} 發送`);
+    renderList();
   } catch (e) {
     toast('❌ 發送失敗：' + e.message);
   } finally {
-    btn.disabled = false;
+    btn.disabled    = false;
     btn.textContent = '✈️ 設定排程';
   }
 }
 
-
-// ── Toast 通知 ────────────────────────────────────────────────
-function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 3000);
-}
-
-// ── 設定頁邏輯 ────────────────────────────────────────────────
+// ══ MODULE: SETTINGS ═════════════════════════════════════════════
 
 function loadSettings() {
   const cfg = getCfg();
-  document.getElementById('cfg-project-name').value  = cfg.projectName  || '';
-  document.getElementById('cfg-sheet-id').value      = cfg.sheetId      || '';
-  document.getElementById('cfg-sheet-gid').value     = cfg.sheetGid     || '';
-  document.getElementById('cfg-github-token').value  = cfg.githubToken  || '';
+  document.getElementById('cfg-project-name').value = cfg.projectName || '';
+  document.getElementById('cfg-sheet-id').value     = cfg.sheetId     || '';
+  document.getElementById('cfg-sheet-gid').value    = cfg.sheetGid    || '';
+  document.getElementById('cfg-github-token').value = cfg.githubToken || '';
   const pn = document.querySelector('.sidebar .project-name');
   if (pn && cfg.projectName) pn.textContent = cfg.projectName;
-  renderAnnouncementTypes(cfg.announcementTypes || [], 'prod');
+  renderAnnouncementTypes(cfg.announcementTypes     || [], 'prod');
   renderAnnouncementTypes(cfg.testAnnouncementTypes || [], 'test');
   const testMode = !!cfg.testMode;
   const chk = document.getElementById('cfg-test-mode');
@@ -1101,34 +1139,31 @@ function toggleTestMode(on) {
 }
 
 function applyTestModeUI(on) {
-  const label = document.getElementById('test-mode-label');
-  const track = document.getElementById('test-mode-track');
-  const thumb  = document.getElementById('test-mode-thumb');
-  if (label) label.textContent = on ? '開啟' : '關閉';
-  if (label) label.style.color = on ? '#f59e0b' : '#888';
-  if (track) track.style.background = on ? '#f59e0b' : '#e5e7eb';
+  const label   = document.getElementById('test-mode-label');
+  const track   = document.getElementById('test-mode-track');
+  const thumb   = document.getElementById('test-mode-thumb');
+  const sidebar = document.querySelector('.sidebar');
+  const banner  = document.getElementById('test-mode-banner');
+  const root    = document.documentElement;
+
+  if (label) { label.textContent = on ? '開啟' : '關閉'; label.style.color = on ? '#f59e0b' : '#888'; }
+  if (track)  track.style.background = on ? '#f59e0b' : '#e5e7eb';
   if (thumb)  thumb.style.left = on ? '22px' : '2px';
 
-  // 測試模式整體配色切換
-  const root = document.documentElement;
-  const sidebar = document.querySelector('.sidebar');
-  const banner = document.getElementById('test-mode-banner');
   if (on) {
     root.style.setProperty('--primary', '#d97706');
     root.style.setProperty('--primary-hover', '#b45309');
     root.style.setProperty('--bg', '#fffbeb');
     if (sidebar) sidebar.style.background = '#78350f';
-    if (banner) banner.style.display = 'block';
+    if (banner)  banner.style.display = 'block';
   } else {
     root.style.setProperty('--primary', '#4f46e5');
     root.style.setProperty('--primary-hover', '#4338ca');
     root.style.setProperty('--bg', '#f5f6fa');
     if (sidebar) sidebar.style.background = '#1e1b4b';
-    if (banner) banner.style.display = 'none';
+    if (banner)  banner.style.display = 'none';
   }
 }
-
-// ── 公告類型設定 ──────────────────────────────────────────────
 
 function saveTypes(types, mode) {
   const cfg = getCfg();
@@ -1143,7 +1178,7 @@ function getTypes(mode) {
 
 function renderAnnouncementTypes(types, mode) {
   const elId = mode === 'test' ? 'cfg-test-announcement-types' : 'cfg-announcement-types';
-  const el = document.getElementById(elId);
+  const el   = document.getElementById(elId);
   if (!el) return;
   if (!types.length) {
     el.innerHTML = '<div style="color:#888;font-size:0.85rem;padding:8px 0;">尚無類型，點右上角「新增類型」</div>';
@@ -1153,14 +1188,14 @@ function renderAnnouncementTypes(types, mode) {
   const LANG_OPTS = ['all', 'TW', 'JP', 'EN'];
 
   el.innerHTML = types.map((t, ti) => {
-    const hasAll = t.langs.some(l => l.lang === 'all');
-    const usedLangs = t.langs.map(l => l.lang);
+    const hasAll     = t.langs.some(l => l.lang === 'all');
+    const usedLangs  = t.langs.map(l => l.lang);
     const canAddLang = !hasAll && usedLangs.length < 4;
 
     const langRows = t.langs.map((l, li) => {
-      const otherLangs = t.langs.filter((_, idx) => idx !== li).map(x => x.lang);
+      const otherLangs       = t.langs.filter((_, idx) => idx !== li).map(x => x.lang);
       const otherHasSpecific = otherLangs.some(v => v !== 'all');
-      const otherHasAll = otherLangs.includes('all');
+      const otherHasAll      = otherLangs.includes('all');
 
       const availOpts = LANG_OPTS.filter(v => {
         if (v === l.lang) return true;
@@ -1225,10 +1260,10 @@ function removeLang(ti, li, mode) {
 function addLang(ti, mode) {
   const types = getTypes(mode);
   if (!types[ti]) return;
-  const usedLangs = types[ti].langs.map(l => l.lang);
+  const usedLangs   = types[ti].langs.map(l => l.lang);
   const hasSpecific = usedLangs.some(v => v !== 'all');
-  const hasAll = usedLangs.includes('all');
-  const candidates = ['TW', 'JP', 'EN', 'all'].filter(v => {
+  const hasAll      = usedLangs.includes('all');
+  const candidates  = ['TW', 'JP', 'EN', 'all'].filter(v => {
     if (usedLangs.includes(v)) return false;
     if (v === 'all' && hasSpecific) return false;
     if (v !== 'all' && hasAll) return false;
@@ -1255,18 +1290,59 @@ function removeType(ti, mode) {
   renderAnnouncementTypes(types, mode);
 }
 
-// ── Erolabs 公告產生 ──────────────────────────────────────────
+function saveSettings() {
+  const cfg = getCfg();
+  const updated = Object.assign({}, cfg, {
+    projectName: document.getElementById('cfg-project-name').value.trim(),
+    sheetId:     document.getElementById('cfg-sheet-id').value.trim(),
+    sheetGid:    document.getElementById('cfg-sheet-gid').value.trim(),
+    githubToken: document.getElementById('cfg-github-token').value.trim(),
+  });
+  localStorage.setItem('ann-cfg', JSON.stringify(updated));
+  const pnEl = document.querySelector('.sidebar .project-name');
+  if (pnEl) pnEl.textContent = updated.projectName;
+  toast('✅ 設定已儲存');
+}
 
-let _erolabsAnn = null;
-let _erolabsMaintList = []; // 所有維護預告清單
+function exportSettings() {
+  const cfg  = getCfg();
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = '雀星公告設定.json';
+  a.click();
+}
+
+function importSettings(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const cfg = JSON.parse(e.target.result);
+      localStorage.setItem('ann-cfg', JSON.stringify(cfg));
+      loadSettings();
+      applyTestModeUI(!!cfg.testMode);
+      toast('✅ 設定已匯入');
+    } catch {
+      toast('❌ 匯入失敗：檔案格式錯誤');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ══ MODULE: EROLABS ══════════════════════════════════════════════
+
+let _erolabsAnn       = null;
+let _erolabsMaintList = [];
 
 function buildErolabsDocs(ann) {
   _erolabsAnn = ann;
 
-  // 找同一個自然週（週一~週日）內的維護預告
   const annDateObj = parseDate(ann.date, '00:00');
   function getWeekBounds(d) {
-    const day = d.getDay(); // 0=日,1=一,...,6=六
+    const day = d.getDay();
     const mon = new Date(d); mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); mon.setHours(0,0,0,0);
     const sun = new Date(mon); sun.setDate(mon.getDate() + 6); sun.setHours(23,59,59,999);
     return { mon, sun };
@@ -1280,19 +1356,18 @@ function buildErolabsDocs(ann) {
 
   const yesRadio = document.querySelector('[name="erolabs-maint"][value="yes"]');
   const noRadio  = document.querySelector('[name="erolabs-maint"][value="no"]');
+  const sel      = document.getElementById('erolabs-maint-select');
 
-  // 填入下拉選單，預設選日期最近的（index 0，已排序）
-  const sel = document.getElementById('erolabs-maint-select');
   if (_erolabsMaintList.length) {
     sel.innerHTML = _erolabsMaintList.map((m, i) =>
-      `<option value="${i}" ${i === 0 ? 'selected' : ''}>${m.date}　${m.titleTW || '（無標題）'}</option>`
+      `<option value="${i}" ${i === 0 ? 'selected' : ''}>${escHtml(m.date)}　${escHtml(m.titleTW || '（無標題）')}</option>`
     ).join('');
     yesRadio.disabled = false;
-    yesRadio.checked = true;
+    yesRadio.checked  = true;
   } else {
-    sel.innerHTML = '<option value="">找不到任何維護預告</option>';
+    sel.innerHTML     = '<option value="">找不到任何維護預告</option>';
     yesRadio.disabled = true;
-    noRadio.checked = true;
+    noRadio.checked   = true;
   }
 
   onErolabsMaintChange();
@@ -1300,7 +1375,7 @@ function buildErolabsDocs(ann) {
 }
 
 function onErolabsMaintChange() {
-  const val = document.querySelector('[name="erolabs-maint"]:checked')?.value;
+  const val      = document.querySelector('[name="erolabs-maint"]:checked')?.value;
   const yesLabel = document.getElementById('erolabs-opt-yes-label');
   const noLabel  = document.getElementById('erolabs-opt-no-label');
   const wrap     = document.getElementById('erolabs-maint-select-wrap');
@@ -1330,68 +1405,25 @@ async function confirmBuildErolabs() {
 }
 
 async function _doGenerateErolabs(ann, maint) {
-  // 標題格式：【M/D】各語系標題
   const normalized = String(ann.date || '').replace(/^0?(\d+)\/0?(\d+)$/, '$1/$2');
 
   const langs = [
-    {
-      code: 'TW',
-      docTitle:     `【${normalized}】${ann.titleTW || ''}`,
-      content:      ann.contentTW || '',
-      maintContent: maint ? trimMaintContent(maint.contentTW || '', 'TW') : '',
-      opening:      maint ? '親愛的雀士們：\n感謝您一直以來對《雀星》的支持與喜愛！' : '',
-      filename:     '活動公告_TW',
-    },
-    {
-      code: 'CN',
-      docTitle:     `【${normalized}】${ann.titleCN || ''}`,
-      content:      ann.contentCN || '',
-      maintContent: maint ? trimMaintContent(maint.contentCN || '', 'CN') : '',
-      opening:      maint ? '亲爱的雀士们：\n感谢您一直以来对《雀星》的支持与喜爱！' : '',
-      filename:     '活動公告_CN',
-    },
-    {
-      code: 'JP',
-      docTitle:     `【${normalized}】${ann.titleJP || ''}`,
-      content:      ann.contentJP || '',
-      maintContent: maint ? trimMaintContent(maint.contentJP || '', 'JP') : '',
-      opening:      maint ? '親愛なる雀士の皆様へ\nいつも『ジャンスター』をご愛顧いただき、誠にありがとうございます。' : '',
-      filename:     '活動公告_JP',
-    },
-    {
-      code: 'EN',
-      docTitle:     `【${normalized}】${ann.titleEN || ''}`,
-      content:      ann.contentEN || '',
-      maintContent: maint ? trimMaintContent(maint.contentEN || '', 'EN') : '',
-      opening:      maint ? 'Dear Players,\nThank you for your continued support and passion for Stardom Riichi Mahjong!' : '',
-      filename:     '活動公告_EN',
-    },
+    { code: 'TW', docTitle: `【${normalized}】${ann.titleTW || ''}`, content: ann.contentTW || '', maintContent: maint ? trimMaintContent(maint.contentTW || '', 'TW') : '', opening: maint ? '親愛的雀士們：\n感謝您一直以來對《雀星》的支持與喜愛！' : '', filename: '活動公告_TW' },
+    { code: 'CN', docTitle: `【${normalized}】${ann.titleCN || ''}`, content: ann.contentCN || '', maintContent: maint ? trimMaintContent(maint.contentCN || '', 'CN') : '', opening: maint ? '亲爱的雀士们：\n感谢您一直以来对《雀星》的支持与喜爱！' : '', filename: '活動公告_CN' },
+    { code: 'JP', docTitle: `【${normalized}】${ann.titleJP || ''}`, content: ann.contentJP || '', maintContent: maint ? trimMaintContent(maint.contentJP || '', 'JP') : '', opening: maint ? '親愛なる雀士の皆様へ\nいつも『ジャンスター』をご愛顧いただき、誠にありがとうございます。' : '', filename: '活動公告_JP' },
+    { code: 'EN', docTitle: `【${normalized}】${ann.titleEN || ''}`, content: ann.contentEN || '', maintContent: maint ? trimMaintContent(maint.contentEN || '', 'EN') : '', opening: maint ? 'Dear Players,\nThank you for your continued support and passion for Stardom Riichi Mahjong!' : '', filename: '活動公告_EN' },
   ];
 
   const zip = new JSZip();
-
-  // 加入 4 個語系的 .doc
   for (const lang of langs) {
     const parts = [];
     parts.push(lang.docTitle);
-    if (lang.opening) {
-      parts.push('');
-      parts.push(lang.opening);
-    }
-    if (lang.maintContent) {
-      parts.push('');
-      parts.push(lang.maintContent);
-    }
-    if (lang.content) {
-      parts.push('');
-      parts.push(lang.content);
-    }
-    const fullText = parts.join('\n');
-    const rtf = textToRtf(fullText);
-    zip.file(lang.filename + '.doc', rtf);
+    if (lang.opening)      { parts.push(''); parts.push(lang.opening); }
+    if (lang.maintContent) { parts.push(''); parts.push(lang.maintContent); }
+    if (lang.content)      { parts.push(''); parts.push(lang.content); }
+    zip.file(lang.filename + '.doc', textToRtf(parts.join('\n')));
   }
 
-  // 優先用已上傳到 GitHub 的圖片，其次用 Sheet 圖片連結
   const imageUrl = _imgCache[ann.date] || '';
   if (imageUrl) {
     try {
@@ -1405,98 +1437,76 @@ async function _doGenerateErolabs(ann, maint) {
     }
   }
 
-  // zip 名稱：雀星_MMDD公告_Erolabs.zip
   const [rawM, rawD] = normalized.split('/');
-  const mmdd = String(rawM).padStart(2,'0') + String(rawD).padStart(2,'0');
+  const mmdd    = String(rawM).padStart(2,'0') + String(rawD).padStart(2,'0');
   const zipName = `雀星_${mmdd}公告_Erolabs.zip`;
 
   const zipBlob = await zip.generateAsync({ type: 'blob' });
   const url = URL.createObjectURL(zipBlob);
-  const a = document.createElement('a');
-  a.href = url;
+  const a   = document.createElement('a');
+  a.href     = url;
   a.download = zipName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-
   toast(`✅ 已下載 ${zipName}`);
 }
 
-// 截斷維護預告中「注意事項」後的文字
 function trimMaintContent(text, lang) {
   if (!text) return '';
-  const cutKeywords = {
-    TW: '【注意事項】',
-    CN: '【注意事项】',
-    JP: '【ご注意】',
-    EN: '[Important Notes]',
-  };
+  const cutKeywords = { TW: '【注意事項】', CN: '【注意事项】', JP: '【ご注意】', EN: '[Important Notes]' };
   const keyword = cutKeywords[lang] || '';
   if (!keyword) return text;
   const idx = text.indexOf(keyword);
   if (idx === -1) return text;
-  // 保留 keyword 之前的內容（去掉結尾空白行）
   return text.substring(0, idx).trimEnd();
 }
 
-// 將純文字轉成 RTF 格式
 function textToRtf(text) {
-  // RTF 需要將 Unicode 字元轉成 \uNNNN? 形式
   function escRtf(str) {
     let out = '';
     for (const ch of str) {
       const code = ch.codePointAt(0);
       if (code < 128) {
-        // ASCII 特殊字元需跳脫
         if (ch === '\\') out += '\\\\';
-        else if (ch === '{')  out += '\\{';
-        else if (ch === '}')  out += '\\}';
+        else if (ch === '{') out += '\\{';
+        else if (ch === '}') out += '\\}';
         else out += ch;
       } else {
-        // Unicode → RTF \uNNNN? 語法（? 是替代字元）
         const signed = code > 32767 ? code - 65536 : code;
         out += `\\u${signed}?`;
       }
     }
     return out;
   }
-
-  const lines = text.split('\n');
+  const lines    = text.split('\n');
   const rtfLines = lines.map(line => `${escRtf(line)}\\par`).join('\n');
-
-  return `{\\rtf1\\ansi\\ansicpg950\\deff0
-{\\fonttbl{\\f0\\froman\\fcharset136 Times New Roman;}}
-{\\colortbl;}
-\\f0\\fs24
-${rtfLines}
-}`;
+  return `{\\rtf1\\ansi\\ansicpg950\\deff0\n{\\fonttbl{\\f0\\froman\\fcharset136 Times New Roman;}}\n{\\colortbl;}\n\\f0\\fs24\n${rtfLines}\n}`;
 }
 
-// ── GitHub 圖片上傳 ───────────────────────────────────────────
-const GITHUB_REPO  = 'windoll/game-announcements';
+// ══ MODULE: GITHUB IMAGE ═════════════════════════════════════════
+
+const GITHUB_REPO   = 'windoll/game-announcements';
 const GITHUB_BRANCH = 'main';
 
-// 本地快取：ann date → 已上傳的 GitHub raw URL
 const _imgCache = JSON.parse(localStorage.getItem('ann-img-cache') || '{}');
 
 function _saveImgCache() {
   localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
 }
 
-// 同步 _imgCache 到 GitHub images/index.json
 async function _syncImgCacheToGitHub() {
   const token = getCfg().githubToken;
   if (!token) return;
   try {
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(_imgCache, null, 2))));
     await _githubPut(token, 'images/index.json', content);
-  } catch(e) {
+  } catch (e) {
     console.warn('同步 index.json 失敗', e);
   }
 }
 
-// 從 GitHub 拉 images/index.json 補進 _imgCache
 async function _loadImgCacheFromGitHub() {
   const token = getCfg().githubToken;
   if (!token) return;
@@ -1509,20 +1519,17 @@ async function _loadImgCacheFromGitHub() {
     const json = JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
     Object.assign(_imgCache, json);
     _saveImgCache();
-    // 重新渲染卡片讓圖片連結出現
-    if (typeof renderList === 'function' && allData.length) renderList();
-  } catch(e) {
+    if (allData.length) renderList();
+  } catch (e) {
     console.warn('載入 index.json 失敗', e);
   }
 }
 
-// 判斷公告類型對應的 GitHub 圖片資料夾
 function _imgFolder(annType, mmdd) {
   if (annType.includes('維護')) return 'images/維護';
   return `images/活動/${mmdd}`;
 }
 
-// 上傳圖片到 GitHub
 async function _githubPut(token, path, base64) {
   let sha = null;
   try {
@@ -1544,7 +1551,6 @@ async function _githubPut(token, path, base64) {
   return `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${path}`;
 }
 
-// 列出 GitHub 資料夾內的圖片
 async function _githubListImages(token, folder) {
   const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${folder}`, {
     headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
@@ -1555,7 +1561,6 @@ async function _githubListImages(token, folder) {
     .map(f => ({ name: f.name, url: `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${folder}/${f.name}` }));
 }
 
-// ── 上傳新圖 ─────────────────────────────────────────────────
 async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1567,9 +1572,9 @@ async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
   const statusEl = document.getElementById('img-upload-status-' + cardId);
   statusEl.textContent = '上傳中…';
 
-  const folder = _imgFolder(annType, mmdd);
+  const folder   = _imgFolder(annType, mmdd);
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = `${folder}/${safeName}`;
+  const path     = `${folder}/${safeName}`;
 
   const base64 = await new Promise((res, rej) => {
     const reader = new FileReader();
@@ -1586,41 +1591,42 @@ async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
     statusEl.textContent = '✅ 上傳成功';
     _updateCardImgPreview(cardId, rawUrl);
     toast('✅ 圖片已上傳');
-  } catch(e) {
+  } catch (e) {
     statusEl.textContent = '❌ ' + e.message;
   }
 }
 
-// 更新卡片圖片預覽
 function _updateCardImgPreview(cardId, url) {
-  const el = document.getElementById('img-preview-' + cardId);
-  if (el) el.innerHTML = `<a href="${url}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>`;
+  const el      = document.getElementById('img-preview-' + cardId);
+  const safeUrl = escUrl(url);
+  if (el && safeUrl) {
+    el.innerHTML = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>`;
+  }
 }
 
-// ── 圖片庫 Modal ─────────────────────────────────────────────
+// ══ MODULE: IMAGE LIBRARY ════════════════════════════════════════
+
 let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '';
 let _imgLibActiveFolder = '';
 
 async function openImgLibrary(cardId, annDate, annType, mmdd) {
-  _imgLibCardId = cardId;
+  _imgLibCardId  = cardId;
   _imgLibAnnDate = annDate;
   _imgLibAnnType = annType;
-  _imgLibMmdd = mmdd;
+  _imgLibMmdd    = mmdd;
 
   document.getElementById('modal-img-library').classList.add('open');
 
   const isMaint = annType.includes('維護');
-  // 維護類只有一個資料夾；活動類有「活動/MMDD」和「維護」兩個可選（活動不一定要維護圖）
   const folders = isMaint
     ? [{ label: '維護圖片', folder: 'images/維護' }]
     : [{ label: `活動 ${annDate}`, folder: `images/活動/${mmdd}` }, { label: '維護圖片', folder: 'images/維護' }];
 
-  // 渲染 tab
   const tabEl = document.getElementById('img-lib-tabs');
   tabEl.innerHTML = folders.map((f, i) => `
     <button onclick="switchImgLibTab(${i})" id="img-lib-tab-${i}"
       style="padding:5px 14px;border-radius:8px;border:1px solid #e5e7eb;cursor:pointer;font-size:0.85rem;background:${i===0?'#6366f1':'white'};color:${i===0?'white':'#374151'};">
-      ${f.label}
+      ${escHtml(f.label)}
     </button>`).join('');
 
   window._imgLibFolders = folders;
@@ -1632,19 +1638,20 @@ async function switchImgLibTab(idx) {
     const btn = document.getElementById('img-lib-tab-' + i);
     if (!btn) return;
     btn.style.background = i === idx ? '#6366f1' : 'white';
-    btn.style.color = i === idx ? 'white' : '#374151';
+    btn.style.color      = i === idx ? 'white'   : '#374151';
   });
 
   const folder = window._imgLibFolders[idx].folder;
   _imgLibActiveFolder = folder;
 
-  const grid = document.getElementById('img-lib-grid');
-  const empty = document.getElementById('img-lib-empty');
+  const grid    = document.getElementById('img-lib-grid');
+  const empty   = document.getElementById('img-lib-empty');
   const loading = document.getElementById('img-lib-loading');
 
-  grid.style.display = 'none';
-  empty.style.display = 'none';
+  grid.style.display    = 'none';
+  empty.style.display   = 'none';
   loading.style.display = 'block';
+  loading.textContent   = '載入中…';
 
   const token = getCfg().githubToken;
   if (!token) { loading.textContent = '請先在設定頁填入 GitHub Token'; return; }
@@ -1654,18 +1661,21 @@ async function switchImgLibTab(idx) {
 
   if (!imgs.length) {
     empty.style.display = 'block';
-    grid.style.display = 'none';
     return;
   }
 
   grid.style.display = 'grid';
-  grid.innerHTML = imgs.map(img => `
-    <div onclick="selectImgFromLibrary('${img.url}')"
+  grid.innerHTML = imgs.map(img => {
+    const safeUrl  = escUrl(img.url);
+    const safeName = escHtml(img.name);
+    return `
+    <div onclick="selectImgFromLibrary('${safeUrl}')"
       style="cursor:pointer;border:2px solid #e5e7eb;border-radius:8px;overflow:hidden;transition:border-color 0.15s;"
       onmouseover="this.style.borderColor='#6366f1'" onmouseout="this.style.borderColor='#e5e7eb'">
-      <img src="${img.url}" style="width:100%;height:90px;object-fit:cover;display:block;">
-      <div style="font-size:0.68rem;color:#666;padding:3px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${img.name}">${img.name}</div>
-    </div>`).join('');
+      <img src="${safeUrl}" style="width:100%;height:90px;object-fit:cover;display:block;" loading="lazy">
+      <div style="font-size:0.68rem;color:#666;padding:3px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${safeName}">${safeName}</div>
+    </div>`;
+  }).join('');
 }
 
 function selectImgFromLibrary(url) {
@@ -1681,54 +1691,31 @@ function closeImgLibrary() {
   document.getElementById('modal-img-library').classList.remove('open');
 }
 
-function saveSettings() {
-  const cfg = getCfg();
-  const updated = Object.assign({}, cfg, {
-    projectName:  document.getElementById('cfg-project-name').value.trim(),
-    sheetId:      document.getElementById('cfg-sheet-id').value.trim(),
-    sheetGid:     document.getElementById('cfg-sheet-gid').value.trim(),
-    githubToken:  document.getElementById('cfg-github-token').value.trim(),
-  });
-  localStorage.setItem('ann-cfg', JSON.stringify(updated));
-  document.querySelector('.sidebar .project-name') &&
-    (document.querySelector('.sidebar .project-name').textContent = updated.projectName);
-  toast('✅ 設定已儲存');
-}
-
-// ── 匯出 / 匯入設定 ──────────────────────────────────────────
-function exportSettings() {
-  const cfg = getCfg();
-  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = '雀星公告設定.json';
-  a.click();
-}
-
-function importSettings(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  event.target.value = '';
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const cfg = JSON.parse(e.target.result);
-      localStorage.setItem('ann-cfg', JSON.stringify(cfg));
-      loadSettings();
-      applyTestModeUI(!!cfg.testMode);
-      toast('✅ 設定已匯入');
-    } catch {
-      toast('❌ 匯入失敗：檔案格式錯誤');
-    }
-  };
-  reader.readAsText(file);
-}
+// ══ MODULE: INIT ═════════════════════════════════════════════════
 
 window.addEventListener('DOMContentLoaded', () => {
-  checkPassword();
-  applyTestModeUI(!!getCfg().testMode);
-  _loadImgCacheFromGitHub();
+  if (sessionStorage.getItem('unlocked') === '1') {
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = '';
+    initApp();
+  } else {
+    // 尚未解鎖，只套用 test mode UI（不需要 token）
+    applyTestModeUI(!!getCfg().testMode);
+    document.getElementById('lock-input')?.focus();
+  }
 });
+
+// 暴露到全域供 HTML inline event handlers 呼叫
+Object.assign(window, {
+  checkPassword, showPage, loadSheet, renderList, toggleCard,
+  openSendModal, renderModalLangs, closeModal, confirmSend,
+  loadSettings, toggleTestMode, saveSettings, exportSettings, importSettings,
+  addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
+  buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
+  uploadImageToGitHub, openImgLibrary, switchImgLibTab, selectImgFromLibrary, closeImgLibrary,
+});
+
+})(); // end IIFE
 </script>
 </body>
 </html>
