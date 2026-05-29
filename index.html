@@ -7,7 +7,6 @@
 <style>
 :root {
   --primary: #4f46e5;
-  --primary-hover: #4338ca;
   --green: #10b981;
   --yellow: #f59e0b;
   --bg: #f5f6fa;
@@ -46,9 +45,7 @@ body {
 .page { display: none; }
 .page.active { display: block; }
 
-.page-title {
-  font-size: 1.3rem; font-weight: 700; margin-bottom: 6px;
-}
+.page-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
 .page-sub { font-size: 0.82rem; color: var(--text-sub); margin-bottom: 24px; }
 
 /* ── 卡片 ── */
@@ -57,6 +54,8 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 20px;
   margin-bottom: 16px;
 }
+.card-no-top { margin-top: 0; }
+.card-warn { border: 1px solid #fbbf24; }
 
 /* ── 統計列 ── */
 .stats { display: flex; gap: 14px; margin-bottom: 24px; }
@@ -85,7 +84,7 @@ body {
   border-left: 4px solid var(--border);
   padding: 14px 18px; margin-bottom: 10px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  transition: box-shadow 0.15s;
+  transition: box-shadow 0.15s; cursor: pointer;
 }
 .ann-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.09); }
 .ann-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -103,7 +102,7 @@ body {
 .dot-upcoming { background: var(--yellow); }
 .dot-past     { background: #d1d5db; }
 .ann-title { font-size: 1rem; font-weight: 600; margin-top: 8px; }
-.lang-divider { border: none; border-top: 1px solid var(--border); margin: 6px 0 6px; }
+.lang-divider { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
 .lang-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
 .lang-check { font-size: 0.72rem; font-weight: 600; padding: 1px 7px; border-radius: 20px; flex-shrink: 0; }
 .lang-ok { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
@@ -111,11 +110,15 @@ body {
 .lang-title-text { font-size: 0.82rem; color: var(--text-sub); }
 .lang-empty { color: #bbb; }
 .content-block { margin-bottom: 8px; }
-.content-text { font-size: 0.85rem; line-height: 1.6; white-space: pre-wrap; padding-left: 4px; margin-top: 3px; }
+.content-text {
+  font-size: 0.85rem; line-height: 1.7; color: #333;
+  white-space: pre-wrap; background: #f9fafb;
+  border-radius: 8px; padding: 10px 12px;
+}
 .ann-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.ann-draft-label { font-size: 0.72rem; color: #bbb; margin-left: auto; }
 
 /* ── 展開內容 ── */
-.ann-card { cursor: pointer; }
 .expand-arrow {
   margin-left: auto; font-size: 0.75rem; color: #bbb;
   transition: transform 0.2s; display: inline-block;
@@ -126,11 +129,6 @@ body {
   border-top: 1px solid #f0f0f0; padding-top: 12px;
 }
 .ann-card.open .ann-content { display: block; }
-.content-text {
-  font-size: 0.85rem; line-height: 1.7; color: #333;
-  white-space: pre-wrap; background: #f9fafb;
-  border-radius: 8px; padding: 10px 12px;
-}
 
 /* ── 按鈕 ── */
 .btn {
@@ -145,7 +143,7 @@ body {
 .btn-green   { background: var(--green); color: white; }
 .btn-outline { background: white; color: var(--text); border: 1px solid var(--border); }
 .btn-sm { padding: 6px 12px; font-size: 0.78rem; }
-
+.btn-full { width: 100%; }
 
 /* ── 通知 toast ── */
 #toast {
@@ -179,8 +177,11 @@ body {
   width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0,0,0,0.15);
 }
+.modal-wide { width: 520px; }
+.modal-img  { max-width: 600px; width: 95%; }
 .modal h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.modal-footer-sm { margin-top: 14px; }
 .field-label { font-size: 0.8rem; font-weight: 600; color: var(--text-sub); margin-bottom: 5px; }
 .field-val {
   font-size: 0.88rem; line-height: 1.6; white-space: pre-wrap;
@@ -188,6 +189,36 @@ body {
   border: 1px solid var(--border); margin-bottom: 14px;
   max-height: 140px; overflow-y: auto;
 }
+
+/* ── 設定頁表單 ── */
+.cfg-input {
+  width: 100%; border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 12px; font-size: 0.9rem; margin-bottom: 14px; outline: none;
+}
+.cfg-input:focus { border-color: #a5b4fc; }
+.cfg-input-mono { font-family: monospace; font-size: 0.85rem; }
+.cfg-hint { font-size: 0.75rem; color: #888; margin-top: -10px; margin-bottom: 14px; }
+.cfg-hint-top { font-size: 0.75rem; color: #888; margin-top: 4px; }
+.cfg-section-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 16px; }
+.cfg-row-between { display: flex; align-items: center; justify-content: space-between; }
+.cfg-row-between-mb { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.cfg-row-gap { display: flex; gap: 10px; margin-top: 4px; }
+.cfg-test-desc { font-size: 0.78rem; color: #888; margin-top: 3px; }
+.cfg-toggle-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.cfg-toggle-label { font-size: 0.85rem; color: #888; }
+.cfg-toggle-wrap { position: relative; width: 44px; height: 24px; }
+.cfg-toggle-input { opacity: 0; width: 0; height: 0; position: absolute; }
+.cfg-toggle-track {
+  position: absolute; inset: 0; border-radius: 12px;
+  background: #e5e7eb; transition: background 0.2s; cursor: pointer;
+}
+.cfg-toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: white; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left 0.2s;
+}
+.cfg-webhook-hint { font-size: 0.75rem; color: #888; margin-top: 8px; }
+
 /* ── 密碼鎖 ── */
 #lock-screen {
   display: flex; align-items: center; justify-content: center;
@@ -216,6 +247,98 @@ body {
   padding: 2px 8px; border-radius: 20px; white-space: nowrap;
   display: inline-flex; align-items: center; gap: 3px;
 }
+
+/* ── 公告卡片：圖片列 ── */
+.ann-img-row {
+  margin-top: 5px; font-size: 0.75rem;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.ann-img-btn {
+  cursor: pointer; color: #6366f1; font-size: 0.75rem;
+  border: 1px solid #6366f1; border-radius: 6px;
+  padding: 2px 8px; background: white; white-space: nowrap;
+}
+.ann-img-upload-label {
+  cursor: pointer; color: #6366f1; font-size: 0.75rem;
+  border: 1px solid #6366f1; border-radius: 6px; padding: 2px 8px; white-space: nowrap;
+}
+.ann-img-status { color: #888; font-size: 0.72rem; }
+
+/* ── 發送 Modal：時間列 ── */
+.modal-time-row { display: flex; gap: 6px; align-items: center; }
+.modal-time-colon { font-size: 1rem; font-weight: 600; }
+.modal-time-hint { font-size: 0.75rem; color: #888; margin-top: 5px; }
+.modal-time-wrap { margin-bottom: 14px; }
+.modal-date-warn {
+  background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 12px; font-size: 0.85rem; color: #92400e;
+}
+.modal-select {
+  border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: 8px 10px; font-size: 0.9rem; outline: none;
+}
+.modal-select-date { flex: 2; }
+.modal-select-time { flex: 1; }
+
+/* ── 圖片庫 ── */
+.img-lib-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.img-lib-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px; max-height: 360px; overflow-y: auto;
+}
+.img-lib-empty { color: #bbb; text-align: center; padding: 30px 0; }
+.img-lib-loading { color: #888; text-align: center; padding: 20px 0; }
+.img-lib-thumb {
+  cursor: pointer; border: 2px solid #e5e7eb; border-radius: 8px; overflow: hidden;
+  transition: border-color 0.15s;
+}
+.img-lib-thumb:hover { border-color: #6366f1; }
+.img-lib-thumb img { width: 100%; height: 90px; object-fit: cover; display: block; }
+.img-lib-name {
+  font-size: 0.68rem; color: #666; padding: 3px 5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── Erolabs Modal ── */
+.erolabs-opt-wrap { margin-bottom: 16px; }
+.erolabs-opts { display: flex; flex-direction: column; gap: 8px; }
+.erolabs-opt-label {
+  display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+}
+.erolabs-opt-label-center { align-items: center; }
+.erolabs-opt-radio { margin-top: 2px; accent-color: #4f46e5; }
+.erolabs-opt-title { font-weight: 600; font-size: 0.9rem; }
+.erolabs-select-wrap { margin-top: 8px; }
+.erolabs-maint-select {
+  width: 100%; border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px; font-size: 0.85rem; outline: none; background: white;
+}
+
+/* ── 載入公告初始畫面 ── */
+.list-placeholder {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 60px 20px; gap: 16px;
+}
+.list-placeholder-icon { font-size: 2.5rem; }
+.list-placeholder-text { font-size: 1rem; color: #6b7280; }
+.list-load-btn { font-size: 1rem; padding: 12px 32px; }
+
+/* ── 維護預告日期警告 ── */
+.card-date-warn {
+  background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px;
+  padding: 6px 10px; margin: 6px 0 2px; font-size: 0.78rem; color: #92400e;
+}
+
+/* ── 排程標籤列 ── */
+.schedule-badges { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* ── 測試模式 banner ── */
+#test-mode-banner {
+  background: #f59e0b; color: #78350f;
+  font-size: 0.78rem; font-weight: 700; text-align: center;
+  padding: 4px 8px; border-radius: 6px; margin-bottom: 8px; letter-spacing: 0.05em;
+}
 </style>
 </head>
 <body>
@@ -229,7 +352,7 @@ body {
     <input type="password" id="lock-input" placeholder="輸入密碼"
       onkeydown="if(event.key==='Enter')checkPassword()">
     <div class="lock-error" id="lock-error"></div>
-    <button class="btn btn-primary" style="width:100%;" onclick="checkPassword()">進入</button>
+    <button class="btn btn-primary btn-full" onclick="checkPassword()">進入</button>
   </div>
 </div>
 
@@ -238,9 +361,9 @@ body {
   <!-- 側邊欄 -->
   <nav class="sidebar">
     <h2>🀄 <span class="project-name">公告管理</span></h2>
-    <div id="test-mode-banner" style="display:none;background:#f59e0b;color:#78350f;font-size:0.78rem;font-weight:700;text-align:center;padding:4px 8px;border-radius:6px;margin-bottom:8px;letter-spacing:0.05em;">🧪 測試模式中</div>
-    <button class="nav-btn active" onclick="showPage('list')">📋 公告列表</button>
-    <button class="nav-btn" onclick="showPage('settings')">⚙️ 設定</button>
+    <div id="test-mode-banner" style="display:none;">🧪 測試模式中</div>
+    <button class="nav-btn active" onclick="showPage('list', event)">📋 公告列表</button>
+    <button class="nav-btn" onclick="showPage('settings', event)">⚙️ 設定</button>
   </nav>
 
   <!-- 主內容 -->
@@ -276,54 +399,49 @@ body {
       </div>
 
       <div id="list-area">
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;">
-          <div style="font-size:2.5rem;">📋</div>
-          <div style="font-size:1rem;color:#6b7280;">點擊下方按鈕載入公告資料</div>
-          <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="loadSheet()">📥 載入公告</button>
+        <div class="list-placeholder">
+          <div class="list-placeholder-icon">📋</div>
+          <div class="list-placeholder-text">點擊下方按鈕載入公告資料</div>
+          <button class="btn btn-primary list-load-btn" onclick="loadSheet()">📥 載入公告</button>
         </div>
       </div>
     </div>
 
-    <!-- ③ 設定頁 -->
+    <!-- 設定頁 -->
     <div id="page-settings" class="page">
       <div class="page-title">⚙️ 設定</div>
       <div class="page-sub">調整後點「儲存設定」即可生效（儲存在此瀏覽器）</div>
 
       <div class="card">
-        <div style="font-weight:600;font-size:0.95rem;margin-bottom:16px;">📋 基本資訊</div>
+        <div class="cfg-section-title">📋 基本資訊</div>
         <div class="field-label">專案名稱（顯示在側邊欄）</div>
-        <input type="text" id="cfg-project-name" placeholder="雀星公告管理"
-          style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.9rem;margin-bottom:14px;outline:none;">
+        <input type="text" id="cfg-project-name" placeholder="雀星公告管理" class="cfg-input">
 
         <div class="field-label">Google Sheet ID</div>
-        <input type="text" id="cfg-sheet-id" placeholder="試算表 ID（網址中的那段）"
-          style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.85rem;font-family:monospace;margin-bottom:14px;outline:none;">
+        <input type="text" id="cfg-sheet-id" placeholder="試算表 ID（網址中的那段）" class="cfg-input cfg-input-mono">
 
         <div class="field-label">Google Sheet GID（工作表 ID）</div>
-        <input type="text" id="cfg-sheet-gid" placeholder="e.g. 1281351206"
-          style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.85rem;font-family:monospace;margin-bottom:14px;outline:none;">
-        <div style="font-size:0.75rem;color:#888;margin-top:-10px;margin-bottom:14px;">在試算表網址 ?gid= 後面的數字</div>
+        <input type="text" id="cfg-sheet-gid" placeholder="e.g. 1281351206" class="cfg-input cfg-input-mono">
+        <div class="cfg-hint">在試算表網址 ?gid= 後面的數字</div>
 
         <div class="field-label">GitHub Personal Access Token</div>
-        <input type="password" id="cfg-github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-          style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.85rem;font-family:monospace;margin-bottom:0;outline:none;">
-        <div style="font-size:0.75rem;color:#888;margin-top:4px;">用於上傳圖片到 GitHub repo（windoll/game-announcements）</div>
+        <input type="password" id="cfg-github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" class="cfg-input cfg-input-mono" style="margin-bottom:0;">
+        <div class="cfg-hint-top">用於上傳圖片到 GitHub repo（windoll/game-announcements）</div>
       </div>
 
       <!-- 測試模式開關 -->
-      <div class="card" style="margin-top:0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div class="card card-no-top">
+        <div class="cfg-row-between">
           <div>
-            <div style="font-weight:600;font-size:0.95rem;">🧪 測試模式</div>
-            <div style="font-size:0.78rem;color:#888;margin-top:3px;">開啟後發送會使用測試頻道和 test webhook URL，不消耗正式 Execution</div>
+            <div class="cfg-section-title" style="margin-bottom:0;">🧪 測試模式</div>
+            <div class="cfg-test-desc">開啟後發送會使用測試頻道和 test webhook URL，不消耗正式 Execution</div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <span id="test-mode-label" style="font-size:0.85rem;color:#888;">關閉</span>
-            <div style="position:relative;width:44px;height:24px;">
-              <input type="checkbox" id="cfg-test-mode" onchange="toggleTestMode(this.checked)"
-                style="opacity:0;width:0;height:0;position:absolute;">
-              <div id="test-mode-track" style="position:absolute;inset:0;border-radius:12px;background:#e5e7eb;transition:background 0.2s;cursor:pointer;" onclick="document.getElementById('cfg-test-mode').click()">
-                <div id="test-mode-thumb" style="position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:white;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left 0.2s;"></div>
+          <div class="cfg-toggle-row">
+            <span id="test-mode-label" class="cfg-toggle-label">關閉</span>
+            <div class="cfg-toggle-wrap">
+              <input type="checkbox" id="cfg-test-mode" class="cfg-toggle-input" onchange="toggleTestMode(this.checked)">
+              <div id="test-mode-track" class="cfg-toggle-track" onclick="document.getElementById('cfg-test-mode').click()">
+                <div id="test-mode-thumb" class="cfg-toggle-thumb"></div>
               </div>
             </div>
           </div>
@@ -331,26 +449,26 @@ body {
       </div>
 
       <!-- 正式頻道設定 -->
-      <div class="card" style="margin-top:0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div style="font-weight:600;font-size:0.95rem;">📢 正式頻道設定</div>
+      <div class="card card-no-top">
+        <div class="cfg-row-between-mb">
+          <div class="cfg-section-title" style="margin-bottom:0;">📢 正式頻道設定</div>
           <button class="btn btn-outline btn-sm" onclick="addAnnouncementType('prod')">＋ 新增類型</button>
         </div>
         <div id="cfg-announcement-types"></div>
-        <div style="font-size:0.75rem;color:#888;margin-top:8px;">Webhook URL 格式：https://discord.com/api/webhooks/...</div>
+        <div class="cfg-webhook-hint">Webhook URL 格式：https://discord.com/api/webhooks/...</div>
       </div>
 
       <!-- 測試頻道設定 -->
-      <div class="card" style="margin-top:0;border:1px solid #fbbf24;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div style="font-weight:600;font-size:0.95rem;">🧪 測試頻道設定</div>
+      <div class="card card-no-top card-warn">
+        <div class="cfg-row-between-mb">
+          <div class="cfg-section-title" style="margin-bottom:0;">🧪 測試頻道設定</div>
           <button class="btn btn-outline btn-sm" onclick="addAnnouncementType('test')">＋ 新增類型</button>
         </div>
         <div id="cfg-test-announcement-types"></div>
-        <div style="font-size:0.75rem;color:#888;margin-top:8px;">Webhook URL 格式：https://discord.com/api/webhooks/...</div>
+        <div class="cfg-webhook-hint">Webhook URL 格式：https://discord.com/api/webhooks/...</div>
       </div>
 
-      <div style="display:flex;gap:10px;margin-top:4px;">
+      <div class="cfg-row-gap">
         <button class="btn btn-primary" onclick="saveSettings()">💾 儲存設定</button>
         <button class="btn btn-outline" onclick="exportSettings()">📤 匯出設定</button>
         <label class="btn btn-outline" style="cursor:pointer;">📥 匯入設定<input type="file" accept=".json" style="display:none;" onchange="importSettings(event)"></label>
@@ -362,34 +480,26 @@ body {
 
 <!-- Erolabs 公告彈窗 -->
 <div class="modal-bg" id="modal-erolabs">
-  <div class="modal" style="width:520px;">
+  <div class="modal modal-wide">
     <h3>📄 建立 Erolabs 公告</h3>
-
-    <div style="margin-bottom:16px;">
+    <div class="erolabs-opt-wrap">
       <div class="field-label" style="margin-bottom:10px;">是否包含維護預告？</div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:10px;" id="erolabs-opt-yes-label">
-          <input type="radio" name="erolabs-maint" value="yes" checked
-            onchange="onErolabsMaintChange()"
-            style="margin-top:2px;accent-color:#4f46e5;">
+      <div class="erolabs-opts">
+        <label class="erolabs-opt-label" id="erolabs-opt-yes-label">
+          <input type="radio" name="erolabs-maint" value="yes" checked class="erolabs-opt-radio" onchange="onErolabsMaintChange()">
           <div style="flex:1;">
-            <div style="font-weight:600;font-size:0.9rem;">包含維護預告</div>
-            <div id="erolabs-maint-select-wrap" style="margin-top:8px;display:none;">
-              <select id="erolabs-maint-select"
-                style="width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.85rem;outline:none;background:white;">
-              </select>
+            <div class="erolabs-opt-title">包含維護預告</div>
+            <div class="erolabs-select-wrap" id="erolabs-maint-select-wrap" style="display:none;">
+              <select id="erolabs-maint-select" class="erolabs-maint-select"></select>
             </div>
           </div>
         </label>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:10px;" id="erolabs-opt-no-label">
-          <input type="radio" name="erolabs-maint" value="no"
-            onchange="onErolabsMaintChange()"
-            style="accent-color:#4f46e5;">
-          <div style="font-weight:600;font-size:0.9rem;">不包含維護預告</div>
+        <label class="erolabs-opt-label erolabs-opt-label-center" id="erolabs-opt-no-label">
+          <input type="radio" name="erolabs-maint" value="no" class="erolabs-opt-radio" onchange="onErolabsMaintChange()">
+          <div class="erolabs-opt-title">不包含維護預告</div>
         </label>
       </div>
     </div>
-
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeErolabsModal()">取消</button>
       <button class="btn btn-primary" onclick="confirmBuildErolabs()">📥 產生並下載</button>
@@ -399,13 +509,13 @@ body {
 
 <!-- 圖片庫 Modal -->
 <div class="modal-bg" id="modal-img-library">
-  <div class="modal" style="max-width:600px;width:95%;">
+  <div class="modal modal-img">
     <h3>📂 圖片庫</h3>
-    <div id="img-lib-tabs" style="display:flex;gap:8px;margin-bottom:14px;"></div>
-    <div id="img-lib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;max-height:360px;overflow-y:auto;"></div>
-    <div id="img-lib-empty" style="display:none;color:#bbb;text-align:center;padding:30px 0;">此分類尚無圖片</div>
-    <div id="img-lib-loading" style="color:#888;text-align:center;padding:20px 0;">載入中…</div>
-    <div class="modal-footer" style="margin-top:14px;">
+    <div id="img-lib-tabs" class="img-lib-tabs"></div>
+    <div id="img-lib-grid" class="img-lib-grid"></div>
+    <div id="img-lib-empty" class="img-lib-empty" style="display:none;">此分類尚無圖片</div>
+    <div id="img-lib-loading" class="img-lib-loading">載入中…</div>
+    <div class="modal-footer modal-footer-sm">
       <button class="btn btn-outline" onclick="closeImgLibrary()">取消</button>
     </div>
   </div>
@@ -422,16 +532,16 @@ body {
     <div class="field-label">語系 ＆ 頻道</div>
     <div id="modal-lang-rows" style="margin-bottom:14px;display:flex;flex-direction:column;gap:4px;"></div>
     <div class="field-label">發送日期 ＆ 時間（台灣時間）</div>
-    <div style="margin-bottom:14px;">
-      <div style="display:flex;gap:6px;align-items:center;">
-        <select id="modal-date" style="flex:2;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:0.9rem;outline:none;"></select>
-        <select id="modal-time-h" style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:0.9rem;outline:none;"></select>
-        <span style="font-size:1rem;font-weight:600;">:</span>
-        <select id="modal-time-m" style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:0.9rem;outline:none;"></select>
+    <div class="modal-time-wrap">
+      <div class="modal-time-row">
+        <select id="modal-date" class="modal-select modal-select-date"></select>
+        <select id="modal-time-h" class="modal-select modal-select-time"></select>
+        <span class="modal-time-colon">:</span>
+        <select id="modal-time-m" class="modal-select modal-select-time"></select>
       </div>
-      <div style="font-size:0.75rem;color:#888;margin-top:5px;">現在是 <span id="modal-now"></span>（台灣時間）</div>
+      <div class="modal-time-hint">現在是 <span id="modal-now"></span>（台灣時間）</div>
     </div>
-    <div id="modal-date-warn" style="display:none;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85rem;color:#92400e;"></div>
+    <div id="modal-date-warn" class="modal-date-warn" style="display:none;"></div>
     <div class="field-label">公告內容預覽</div>
     <div class="field-val" id="modal-content"></div>
     <div class="modal-footer">
@@ -470,8 +580,6 @@ const N8N_WEBHOOK_PROD   = 'https://charlie98783.app.n8n.cloud/webhook/send-anno
 const N8N_WEBHOOK_TEST   = 'https://charlie98783.app.n8n.cloud/webhook-test/send-announcement';
 
 function N8N_WEBHOOK() { return getCfg().testMode ? N8N_WEBHOOK_TEST : N8N_WEBHOOK_PROD; }
-function SHEET_ID()    { return getCfg().sheetId; }
-function SHEET_GID()   { return getCfg().sheetGid; }
 
 function getCfg() {
   try {
@@ -488,11 +596,12 @@ function escHtml(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// 允許合法 https URL，拒絕 javascript: 等危險協定
 function escUrl(s) {
   const str = String(s || '');
   return /^https?:\/\//i.test(str) ? escHtml(str) : '';
 }
+
+function stopProp(e) { e.stopPropagation(); }
 
 function toast(msg) {
   const el = document.getElementById('toast');
@@ -524,10 +633,8 @@ async function checkPassword() {
   }
 }
 
-// 統一初始化入口（解鎖後或 session 已解鎖時呼叫）
 function initApp() {
   applyTestModeUI(!!getCfg().testMode);
-  // 快取無效時才在初始化時預先拉取，有效則等 loadSheet 後再判斷
   if (!_imgCacheIsValid()) _loadImgCacheFromGitHub();
 }
 
@@ -536,19 +643,23 @@ function initApp() {
 let allData    = [];
 let pendingAnn = null;
 
+// Send Modal 暫存（原本掛在 window，改為 IIFE 內部變數）
+let _modalAnn      = null;
+let _modalMessages = [];
+
 // ══ MODULE: NAV ══════════════════════════════════════════════════
 
-function showPage(name) {
+function showPage(name, e) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  event.currentTarget.classList.add('active');
+  e.currentTarget.classList.add('active');
   if (name === 'settings') loadSettings();
 }
 
 // ══ MODULE: SHEET ════════════════════════════════════════════════
 
-let _isLoadingSheet = false; // 防重複點擊
+let _isLoadingSheet = false;
 
 async function loadSheet() {
   if (_isLoadingSheet) return;
@@ -557,7 +668,8 @@ async function loadSheet() {
   document.getElementById('list-area').innerHTML = '<div class="loading">⏳ 正在讀取試算表...</div>';
   document.getElementById('list-updated').textContent = '載入中...';
 
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID()}/gviz/tq?tqx=out:json&gid=${SHEET_GID()}&headers=1`;
+  const { sheetId, sheetGid } = getCfg();
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${sheetGid}&headers=1`;
 
   try {
     const res  = await fetch(url);
@@ -620,7 +732,6 @@ async function loadSheet() {
     document.getElementById('list-updated').textContent =
       `上次更新：${new Date().toLocaleString('zh-TW')}`;
     renderList();
-    // 快取當天有效則直接用，否則重新拉 GitHub
     if (!_imgCacheIsValid()) _loadImgCacheFromGitHub();
   } catch (e) {
     document.getElementById('list-area').innerHTML =
@@ -636,11 +747,6 @@ async function loadSheet() {
 
 // ══ MODULE: DATE UTILS ═══════════════════════════════════════════
 
-/**
- * 解析 "M/D" 格式日期。
- * 跨年處理：若公告月份與當前月份差距超過 6 個月，
- * 自動判斷屬於上一年或下一年，避免跨年排序錯誤。
- */
 function parseDate(d, t) {
   if (!d) return null;
   const parts = String(d).split('/').map(Number).filter(Boolean);
@@ -651,7 +757,6 @@ function parseDate(d, t) {
   const now = new Date();
   let year = now.getFullYear();
   const monthDiff = m - (now.getMonth() + 1);
-  // 差距超過 6 個月 → 跨年（如現在 1 月，公告 12 月 → 屬於去年）
   if (monthDiff > 6)  year -= 1;
   if (monthDiff < -6) year += 1;
 
@@ -680,7 +785,6 @@ const statusOrder = { upcoming: 0, today: 1, past: 2 };
 const statusLabel = { today: '📅 今日', upcoming: '⏰ 未來排程', past: '✓ 已過期' };
 
 // ══ MODULE: SCHEDULE STORE ═══════════════════════════════════════
-// 存放已排程記錄，key = ann.date，value = [{ sendDate, sendTime, typeName }]
 
 function _getSchedules() {
   try { return JSON.parse(localStorage.getItem('ann-schedules') || '{}'); } catch { return {}; }
@@ -689,16 +793,32 @@ function _getSchedules() {
 function _saveSchedule(annDate, sendDate, sendTime, typeName) {
   const all = _getSchedules();
   if (!all[annDate]) all[annDate] = [];
-  // 避免重複記錄相同 sendDate+sendTime
   const dup = all[annDate].find(r => r.sendDate === sendDate && r.sendTime === sendTime);
   if (!dup) all[annDate].push({ sendDate, sendTime, typeName, createdAt: new Date().toISOString() });
   localStorage.setItem('ann-schedules', JSON.stringify(all));
 }
 
-function _getScheduleBadgesHtml(annDate) {
-  const records = (_getSchedules()[annDate]) || [];
+function _getScheduleBadgesHtml(annDate, schedulesAll) {
+  const records = schedulesAll[annDate] || [];
   if (!records.length) return '';
-  return records.map(r =>
+
+  const now = new Date();
+  const valid = records.filter(r => {
+    const [mm, dd] = r.sendDate.split('/').map(Number);
+    const [hh, mi] = r.sendTime.split(':').map(Number);
+    const t = new Date(now.getFullYear(), mm - 1, dd, hh, mi);
+    const mDiff = mm - (now.getMonth() + 1);
+    if (mDiff > 6)  t.setFullYear(t.getFullYear() - 1);
+    if (mDiff < -6) t.setFullYear(t.getFullYear() + 1);
+    return t > now;
+  });
+
+  if (valid.length !== records.length) {
+    schedulesAll[annDate] = valid;
+    localStorage.setItem('ann-schedules', JSON.stringify(schedulesAll));
+  }
+
+  return valid.map(r =>
     `<span class="scheduled-badge">✈️ ${escHtml(r.sendDate)} ${escHtml(r.sendTime)}${r.typeName ? ' · ' + escHtml(r.typeName) : ''}</span>`
   ).join(' ');
 }
@@ -710,26 +830,30 @@ function renderList() {
   const tf = document.getElementById('tf').value;
   const sf = document.getElementById('sf').value;
 
-  let list = allData.filter(a => {
+  const schedulesAll = _getSchedules();
+
+  const withMeta = allData.map(a => {
+    const dt = parseDate(a.date, a.time);
+    const st = getStatus(dt);
+    return { a, dt, st };
+  });
+
+  let list = withMeta.filter(({ a, st }) => {
     if (q && !(a.titleTW + a.date + a.type).toLowerCase().includes(q)) return false;
     if (tf && !a.type.includes(tf)) return false;
-    if (sf !== 'all' && getStatus(parseDate(a.date, a.time)) !== sf) return false;
+    if (sf !== 'all' && st !== sf) return false;
     return true;
   });
 
-  list.sort((a, b) => {
-    const da = parseDate(a.date, a.time), db = parseDate(b.date, b.time);
-    const sa = getStatus(da), sb = getStatus(db);
-    if (statusOrder[sa] !== statusOrder[sb]) return statusOrder[sa] - statusOrder[sb];
-    return (+db || 0) - (+da || 0);
+  list.sort((x, y) => {
+    if (statusOrder[x.st] !== statusOrder[y.st]) return statusOrder[x.st] - statusOrder[y.st];
+    return (+y.dt || 0) - (+x.dt || 0);
   });
 
-  // 統計
   let todayCnt = 0, futureCnt = 0;
-  allData.forEach(a => {
-    const s = getStatus(parseDate(a.date, a.time));
-    if (s === 'today') todayCnt++;
-    else if (s === 'upcoming') futureCnt++;
+  withMeta.forEach(({ st }) => {
+    if (st === 'today') todayCnt++;
+    else if (st === 'upcoming') futureCnt++;
   });
   document.getElementById('s-total').textContent  = allData.length;
   document.getElementById('s-today').textContent  = todayCnt;
@@ -741,9 +865,8 @@ function renderList() {
   }
 
   const groups = {};
-  list.forEach(a => {
-    const s = getStatus(parseDate(a.date, a.time));
-    (groups[s] = groups[s] || []).push(a);
+  list.forEach(({ a, st }) => {
+    (groups[st] = groups[st] || []).push(a);
   });
 
   let html = '';
@@ -752,7 +875,7 @@ function renderList() {
     html += `<div class="sec-label">${statusLabel[s]}（${groups[s].length}）</div>`;
     groups[s].forEach((a, i) => {
       const id = s + '_' + i;
-      const st = getStatus(parseDate(a.date, a.time));
+      const st = s;
       const bc = borderColor[st];
       const dateDisplay = a.date + (a.time ? ' ' + a.time : '');
 
@@ -766,7 +889,7 @@ function renderList() {
         mkCheck('JP', a.titleJP) +
         mkCheck('EN', a.titleEN);
 
-      const isDraft    = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
+      const isDraft     = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
       const defaultTime = a.time || '10:00';
 
       const mkContent = (code, val) => val
@@ -783,7 +906,6 @@ function renderList() {
           '</div>';
       }
 
-      // 維護預告日期防呆
       let cardDateWarn = '';
       if (a.type && a.type.includes('維護預告') && a.contentTW) {
         const mMatch = a.contentTW.match(/維護時間[\s\S]*?(\d{4})年(\d{1,2})月(\d{1,2})日/);
@@ -793,25 +915,22 @@ function renderList() {
           if (sParts.length === 2) {
             const sM = parseInt(sParts[0], 10), sD = parseInt(sParts[1], 10);
             if (cM !== sM || cD !== sD) {
-              cardDateWarn = `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:6px 10px;margin:6px 0 2px;font-size:0.78rem;color:#92400e;">⚠️ <strong>日期不符</strong>：Sheet 日期 <strong>${escHtml(a.date)}</strong>，內文維護時間為 <strong>${cM}/${cD}</strong></div>`;
+              cardDateWarn = `<div class="card-date-warn">⚠️ <strong>日期不符</strong>：Sheet 日期 <strong>${escHtml(a.date)}</strong>，內文維護時間為 <strong>${cM}/${cD}</strong></div>`;
             }
           }
         }
       }
 
-      // 圖片預覽（escUrl 防 XSS）
-      const imgUrl        = escUrl(_imgCache[a.date] || '');
+      const imgUrl         = escUrl(_imgCache[a.date] || '');
       const imgPreviewHtml = imgUrl
         ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>`
         : '<span style="color:#bbb;">尚無圖片</span>';
 
-      // 排程狀態標籤
-      const scheduleBadges = _getScheduleBadgesHtml(a.date);
-
-      const annJson  = escHtml(JSON.stringify(a));
-      const safeType = escHtml((a.type || '').replace(/'/g, ''));
-      const safeMmdd = escHtml((a.date || '').replace(/\//g, ''));
-      const safeDate = escHtml(a.date || '');
+      const scheduleBadges = _getScheduleBadgesHtml(a.date, schedulesAll);
+      const annJson        = escHtml(JSON.stringify(a));
+      const safeType       = escHtml((a.type || '').replace(/'/g, ''));
+      const safeMmdd       = escHtml((a.date || '').replace(/\//g, ''));
+      const safeDate       = escHtml(a.date || '');
 
       html += `
 <div class="ann-card" id="card-${id}" style="border-left-color:${bc}" onclick="toggleCard('${id}')">
@@ -819,25 +938,25 @@ function renderList() {
     <span class="dot dot-${st}"></span>
     <span class="ann-date">${escHtml(dateDisplay)}</span>
     ${a.type ? `<span class="badge ${badgeClass(a.type)}">${escHtml(a.type)}</span>` : ''}
-    ${isDraft ? '<span style="font-size:0.72rem;color:#bbb;margin-left:auto;">草稿</span>' : ''}
+    ${isDraft ? '<span class="ann-draft-label">草稿</span>' : ''}
     ${!isDraft ? '<span class="expand-arrow">▼</span>' : ''}
   </div>
   <div class="ann-title">${escHtml(a.titleTW || '（無標題）')}</div>
   ${cardDateWarn}
   ${langTags}
-  ${scheduleBadges ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">${scheduleBadges}</div>` : ''}
-  <div style="margin-top:5px;font-size:0.75rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;" onclick="event.stopPropagation()">
+  ${scheduleBadges ? `<div class="schedule-badges">${scheduleBadges}</div>` : ''}
+  <div class="ann-img-row" onclick="stopProp(event)">
     <span id="img-preview-${id}">${imgPreviewHtml}</span>
-    <button onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}')" style="cursor:pointer;color:#6366f1;font-size:0.75rem;border:1px solid #6366f1;border-radius:6px;padding:2px 8px;background:white;white-space:nowrap;">📂 圖片庫</button>
-    <label style="cursor:pointer;color:#6366f1;font-size:0.75rem;border:1px solid #6366f1;border-radius:6px;padding:2px 8px;white-space:nowrap;">
+    <button class="ann-img-btn" onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}')">📂 圖片庫</button>
+    <label class="ann-img-upload-label">
       ⬆ 上傳新圖
       <input type="file" accept="image/*" style="display:none;" onchange="uploadImageToGitHub(event,'${id}','${safeDate}','${safeType}','${safeMmdd}')">
     </label>
-    <span id="img-upload-status-${id}" style="color:#888;font-size:0.72rem;"></span>
+    <span id="img-upload-status-${id}" class="ann-img-status"></span>
   </div>
   ${contentHtml}
   ${!isDraft && st !== 'past' ? `
-  <div class="ann-actions" onclick="event.stopPropagation()">
+  <div class="ann-actions" onclick="stopProp(event)">
     <button class="btn btn-green btn-sm" onclick="openSendModal(${annJson}, '${escHtml(defaultTime)}')">
       ✈️ 發送到 Discord
     </button>
@@ -869,7 +988,7 @@ function openSendModal(ann, defaultTime) {
   if (ann.titleTW || ann.contentTW) content.push([ann.titleTW, ann.contentTW].filter(Boolean).join('\n'));
   if (ann.titleJP || ann.contentJP) content.push([ann.titleJP, ann.contentJP].filter(Boolean).join('\n'));
   if (ann.titleEN || ann.contentEN) content.push([ann.titleEN, ann.contentEN].filter(Boolean).join('\n'));
-  let contentStr = content.join('\n\n---\n\n');
+  const contentStr = content.join('\n\n---\n\n');
 
   const cfg = getCfg();
   const announcementTypes = (cfg.testMode ? cfg.testAnnouncementTypes : cfg.announcementTypes) || [];
@@ -878,7 +997,7 @@ function openSendModal(ann, defaultTime) {
   let defaultTypeIdx = announcementTypes.findIndex(t => annType.includes(t.name) || t.name.includes(annType));
   if (defaultTypeIdx < 0) defaultTypeIdx = 0;
 
-  window._modalAnn = ann;
+  _modalAnn = ann;
 
   if (!announcementTypes.length) {
     document.getElementById('modal-type-radios').innerHTML =
@@ -888,8 +1007,7 @@ function openSendModal(ann, defaultTime) {
     document.getElementById('modal-type-radios').innerHTML = announcementTypes.map((t, i) => `
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;${i === defaultTypeIdx ? 'border-color:#6366f1;background:#f5f3ff;' : ''}">
         <input type="radio" name="modal-type" value="${i}" ${i === defaultTypeIdx ? 'checked' : ''}
-          onchange="renderModalLangs(${i})"
-          style="accent-color:#6366f1;">
+          onchange="renderModalLangs(${i})" style="accent-color:#6366f1;">
         <span style="font-size:0.9rem;font-weight:600;">${escHtml(t.name)}</span>
       </label>`).join('');
     renderModalLangs(defaultTypeIdx);
@@ -973,7 +1091,7 @@ function renderModalLangs(typeIdx) {
   const cfg = getCfg();
   const announcementTypes = (cfg.testMode ? cfg.testAnnouncementTypes : cfg.announcementTypes) || [];
   const t   = announcementTypes[typeIdx];
-  const ann = window._modalAnn || {};
+  const ann = _modalAnn || {};
   const langDefs = [
     { code: 'TW', title: ann.titleTW || '', content: ann.contentTW || '' },
     { code: 'JP', title: ann.titleJP || '', content: ann.contentJP || '' },
@@ -987,7 +1105,7 @@ function renderModalLangs(typeIdx) {
     label.style.background  = i === typeIdx ? '#f5f3ff' : '';
   });
 
-  window._modalMessages = [];
+  _modalMessages = [];
 
   if (!t) {
     document.getElementById('modal-lang-rows').innerHTML = '';
@@ -1002,7 +1120,7 @@ function renderModalLangs(typeIdx) {
     const hasWebhook = !!webhook;
 
     if (hasContent && hasWebhook) {
-      window._modalMessages.push({ code, title, content, webhook, typeName: t.name });
+      _modalMessages.push({ code, title, content, webhook, typeName: t.name });
     }
 
     let statusLbl, statusStyle;
@@ -1034,15 +1152,19 @@ async function confirmSend() {
   if (!dateVal || !hourVal || !minVal) { toast('⚠️ 請選擇發送日期與時間'); return; }
   const timeVal = hourVal + ':' + minVal;
 
-  const [mm, dd] = dateVal.split('/');
+  const [mm, dd] = dateVal.split('/').map(Number);
   const twNow    = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-  const selectedTW = new Date(twNow.getFullYear(), parseInt(mm) - 1, parseInt(dd), parseInt(hourVal), parseInt(minVal));
+  let year = twNow.getFullYear();
+  const mDiff = mm - (twNow.getMonth() + 1);
+  if (mDiff > 6)  year -= 1;
+  if (mDiff < -6) year += 1;
+  const selectedTW = new Date(year, mm - 1, dd, parseInt(hourVal), parseInt(minVal));
   if (selectedTW <= twNow) {
     toast('⚠️ 發送時間已過，請選擇未來的時間');
     return;
   }
 
-  const messages = (window._modalMessages || []).map(m => ({
+  const messages = _modalMessages.map(m => ({
     lang:        m.code,
     title:       m.title,
     content:     m.content,
@@ -1059,7 +1181,6 @@ async function confirmSend() {
   btn.disabled    = true;
   btn.textContent = '發送中...';
 
-  // 取得目前選中的類型名稱
   const cfg = getCfg();
   const announcementTypes = (cfg.testMode ? cfg.testAnnouncementTypes : cfg.announcementTypes) || [];
   const selectedTypeIdx   = parseInt(document.querySelector('[name="modal-type"]:checked')?.value ?? '0');
@@ -1081,10 +1202,7 @@ async function confirmSend() {
     });
 
     if (!res.ok) throw new Error('n8n 回應錯誤：' + res.status);
-    const text = await res.text();
-    const data = text ? JSON.parse(text) : {};
 
-    // 儲存排程記錄，並重新渲染以顯示標籤
     _saveSchedule(pendingAnn.date, dateVal, timeVal, typeName);
     closeModal();
     toast(`✅ 排程已設定！將於 ${dateVal} ${timeVal} 發送`);
@@ -1136,13 +1254,11 @@ function applyTestModeUI(on) {
 
   if (on) {
     root.style.setProperty('--primary', '#d97706');
-    root.style.setProperty('--primary-hover', '#b45309');
     root.style.setProperty('--bg', '#fffbeb');
     if (sidebar) sidebar.style.background = '#78350f';
     if (banner)  banner.style.display = 'block';
   } else {
     root.style.setProperty('--primary', '#4f46e5');
-    root.style.setProperty('--primary-hover', '#4338ca');
     root.style.setProperty('--bg', '#f5f6fa');
     if (sidebar) sidebar.style.background = '#1e1b4b';
     if (banner)  banner.style.display = 'none';
@@ -1480,7 +1596,6 @@ function _saveImgCache() {
   localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
 }
 
-// 快取時間戳：當天有效（到午夜失效）
 function _imgCacheIsValid() {
   const ts = localStorage.getItem('ann-img-cache-ts');
   if (!ts) return false;
@@ -1497,18 +1612,19 @@ function _markImgCacheFetched() {
 
 async function _syncImgCacheToGitHub() {
   const token = getCfg().githubToken;
-  if (!token) return;
+  if (!token) return false;
   try {
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(_imgCache, null, 2))));
     await _githubPut(token, 'images/index.json', content);
+    return true;
   } catch (e) {
     console.warn('同步 index.json 失敗', e);
+    return false;
   }
 }
 
 async function _loadImgCacheFromGitHub() {
   try {
-    // 使用 raw URL，不需要 token 也沒有 rate limit
     const res = await fetch(
       `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/images/index.json?t=${Date.now()}`
     );
@@ -1521,16 +1637,6 @@ async function _loadImgCacheFromGitHub() {
   } catch (e) {
     console.warn('載入 index.json 失敗', e);
   }
-}
-
-// 手動強制重新拉取圖片快取
-async function syncImgCache() {
-  const btn = document.getElementById('btn-sync-img');
-  if (btn) { btn.disabled = true; btn.textContent = '同步中…'; }
-  localStorage.removeItem('ann-img-cache-ts'); // 強制讓快取失效
-  await _loadImgCacheFromGitHub();
-  if (btn) { btn.disabled = false; btn.textContent = '🖼 同步圖片'; }
-  toast('✅ 圖片已同步');
 }
 
 function _imgFolder(annType, mmdd) {
@@ -1575,7 +1681,7 @@ async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
   event.target.value = '';
 
   const token = getCfg().githubToken;
-  if (!token) { alert('請先在設定頁填入 GitHub Token'); return; }
+  if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
 
   const statusEl = document.getElementById('img-upload-status-' + cardId);
   statusEl.textContent = '上傳中…';
@@ -1595,10 +1701,14 @@ async function uploadImageToGitHub(event, cardId, annDate, annType, mmdd) {
     const rawUrl = await _githubPut(token, path, base64);
     _imgCache[annDate] = rawUrl;
     _saveImgCache();
-    _syncImgCacheToGitHub();
+    const synced = await _syncImgCacheToGitHub();
     statusEl.textContent = '✅ 上傳成功';
     _updateCardImgPreview(cardId, rawUrl);
-    toast('✅ 圖片已上傳');
+    if (synced) {
+      toast('✅ 圖片已上傳');
+    } else {
+      toast('⚠️ 圖片已上傳，但同步失敗，其他裝置可能看不到');
+    }
   } catch (e) {
     statusEl.textContent = '❌ ' + e.message;
   }
@@ -1615,6 +1725,7 @@ function _updateCardImgPreview(cardId, url) {
 // ══ MODULE: IMAGE LIBRARY ════════════════════════════════════════
 
 let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '';
+let _isLoadingImgLib = false;
 
 async function openImgLibrary(cardId, annDate, annType, mmdd) {
   _imgLibCardId  = cardId;
@@ -1641,6 +1752,9 @@ async function openImgLibrary(cardId, annDate, annType, mmdd) {
 }
 
 async function switchImgLibTab(idx) {
+  if (_isLoadingImgLib) return;
+  _isLoadingImgLib = true;
+
   window._imgLibFolders.forEach((_, i) => {
     const btn = document.getElementById('img-lib-tab-' + i);
     if (!btn) return;
@@ -1648,8 +1762,7 @@ async function switchImgLibTab(idx) {
     btn.style.color      = i === idx ? 'white'   : '#374151';
   });
 
-  const folder = window._imgLibFolders[idx].folder;
-
+  const folder  = window._imgLibFolders[idx].folder;
   const grid    = document.getElementById('img-lib-grid');
   const empty   = document.getElementById('img-lib-empty');
   const loading = document.getElementById('img-lib-loading');
@@ -1660,41 +1773,58 @@ async function switchImgLibTab(idx) {
   loading.textContent   = '載入中…';
 
   const token = getCfg().githubToken;
-  if (!token) { loading.textContent = '請先在設定頁填入 GitHub Token'; return; }
+  if (!token) { loading.textContent = '請先在設定頁填入 GitHub Token'; _isLoadingImgLib = false; return; }
 
-  const imgs = await _githubListImages(token, folder);
-  loading.style.display = 'none';
+  try {
+    const imgs = await _githubListImages(token, folder);
+    loading.style.display = 'none';
 
-  if (!imgs.length) {
-    empty.style.display = 'block';
-    return;
+    if (!imgs.length) {
+      empty.style.display = 'block';
+      return;
+    }
+
+    grid.style.display = 'grid';
+    grid.innerHTML = imgs.map(img => {
+      const safeUrl  = escUrl(img.url);
+      const safeName = escHtml(img.name);
+      return `
+      <div class="img-lib-thumb" onclick="selectImgFromLibrary('${safeUrl}')">
+        <img src="${safeUrl}" loading="lazy">
+        <div class="img-lib-name" title="${safeName}">${safeName}</div>
+      </div>`;
+    }).join('');
+  } finally {
+    _isLoadingImgLib = false;
   }
-
-  grid.style.display = 'grid';
-  grid.innerHTML = imgs.map(img => {
-    const safeUrl  = escUrl(img.url);
-    const safeName = escHtml(img.name);
-    return `
-    <div onclick="selectImgFromLibrary('${safeUrl}')"
-      style="cursor:pointer;border:2px solid #e5e7eb;border-radius:8px;overflow:hidden;transition:border-color 0.15s;"
-      onmouseover="this.style.borderColor='#6366f1'" onmouseout="this.style.borderColor='#e5e7eb'">
-      <img src="${safeUrl}" style="width:100%;height:90px;object-fit:cover;display:block;" loading="lazy">
-      <div style="font-size:0.68rem;color:#666;padding:3px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${safeName}">${safeName}</div>
-    </div>`;
-  }).join('');
 }
 
-function selectImgFromLibrary(url) {
+async function selectImgFromLibrary(url) {
   _imgCache[_imgLibAnnDate] = url;
   _saveImgCache();
-  _syncImgCacheToGitHub();
+  const synced = await _syncImgCacheToGitHub();
   _updateCardImgPreview(_imgLibCardId, url);
   closeImgLibrary();
-  toast('✅ 已套用圖片');
+  if (synced) {
+    toast('✅ 已套用圖片');
+  } else {
+    toast('⚠️ 已套用圖片，但同步失敗，其他裝置可能看不到');
+  }
 }
 
 function closeImgLibrary() {
   document.getElementById('modal-img-library').classList.remove('open');
+}
+
+// ══ MODULE: IMG CACHE SYNC ═══════════════════════════════════════
+
+async function syncImgCache() {
+  const btn = document.getElementById('btn-sync-img');
+  if (btn) { btn.disabled = true; btn.textContent = '同步中…'; }
+  localStorage.removeItem('ann-img-cache-ts');
+  await _loadImgCacheFromGitHub();
+  if (btn) { btn.disabled = false; btn.textContent = '🖼 同步圖片'; }
+  toast('✅ 圖片已同步');
 }
 
 // ══ MODULE: INIT ═════════════════════════════════════════════════
@@ -1705,15 +1835,13 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('main-app').style.display = '';
     initApp();
   } else {
-    // 尚未解鎖，只套用 test mode UI（不需要 token）
     applyTestModeUI(!!getCfg().testMode);
     document.getElementById('lock-input')?.focus();
   }
 });
 
-// 暴露到全域供 HTML inline event handlers 呼叫
 Object.assign(window, {
-  checkPassword, showPage, loadSheet, renderList, toggleCard,
+  stopProp, checkPassword, showPage, loadSheet, renderList, toggleCard,
   openSendModal, renderModalLangs, closeModal, confirmSend,
   loadSettings, toggleTestMode, saveSettings, exportSettings, importSettings,
   addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
@@ -1722,7 +1850,7 @@ Object.assign(window, {
   syncImgCache,
 });
 
-})(); // end IIFE
+})();
 </script>
 </body>
 </html>
