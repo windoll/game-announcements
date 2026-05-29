@@ -313,21 +313,20 @@ body {
 .img-lib-upload-clear:hover { color: #ef4444; }
 .img-lib-upload-status { font-size: 0.8rem; color: var(--text-sub); margin-top: 8px; min-height: 18px; }
 
-/* ── 公告卡片：圖片列 ── */
-.ann-img-row {
-  margin-top: 5px; font-size: 0.75rem;
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+/* ── 語系內圖片列 ── */
+.lang-img-row {
+  margin-left: auto; display: flex; align-items: center; gap: 6px;
 }
-.ann-img-btn {
-  cursor: pointer; color: #6366f1; font-size: 0.75rem;
+.lang-img-link {
+  color: #6366f1; text-decoration: none; font-size: 0.75rem;
+}
+.lang-img-empty { color: #bbb; font-size: 0.75rem; }
+.ann-img-btn-sm {
+  cursor: pointer; color: #6366f1; font-size: 0.72rem;
   border: 1px solid #6366f1; border-radius: 6px;
-  padding: 2px 8px; background: white; white-space: nowrap;
+  padding: 1px 6px; background: white; white-space: nowrap;
+  line-height: 1.6;
 }
-.ann-img-upload-label {
-  cursor: pointer; color: #6366f1; font-size: 0.75rem;
-  border: 1px solid #6366f1; border-radius: 6px; padding: 2px 8px; white-space: nowrap;
-}
-.ann-img-status { color: #888; font-size: 0.72rem; }
 
 /* ── 發送 Modal：時間列 ── */
 .modal-time-row { display: flex; gap: 6px; align-items: center; }
@@ -991,17 +990,42 @@ function renderList() {
 
       const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
 
-      const mkContent = (code, val) => val
-        ? `<div class="content-block"><div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span></div><div class="content-text">${escHtml(val)}</div></div>`
-        : `<div class="content-block"><div class="lang-row"><span class="lang-check lang-no">${code} ✗</span></div></div>`;
+      // 取得各語系圖片 URL（相容舊格式）
+      const imgEntry = _imgCache[a.date];
+      const getImgUrl = (lang) => {
+        if (!imgEntry) return '';
+        if (typeof imgEntry === 'string') return imgEntry; // 舊格式相容
+        return imgEntry[lang] || imgEntry['ALL'] || '';
+      };
+
+      const mkContent = (code, lang, val) => {
+        const imgUrl = escUrl(getImgUrl(lang));
+        const imgHtml = imgUrl
+          ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link">🖼 查看圖片</a>`
+          : '<span class="lang-img-empty">尚無圖片</span>';
+        return val
+          ? `<div class="content-block">
+               <div class="lang-row">
+                 <span class="lang-check lang-ok">${code} ✓</span>
+                 <span class="lang-img-row" onclick="stopProp(event)">${imgHtml}<button class="ann-img-btn-sm" onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}','${lang}')">📂</button></span>
+               </div>
+               <div class="content-text">${escHtml(val)}</div>
+             </div>`
+          : `<div class="content-block">
+               <div class="lang-row">
+                 <span class="lang-check lang-no">${code} ✗</span>
+                 <span class="lang-img-row" onclick="stopProp(event)">${imgHtml}<button class="ann-img-btn-sm" onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}','${lang}')">📂</button></span>
+               </div>
+             </div>`;
+      };
       let contentHtml = '';
       if (!isDraft) {
         contentHtml =
           '<div class="ann-content">' +
-          mkContent('TW', a.contentTW) +
-          mkContent('CN', a.contentCN) +
-          mkContent('JP', a.contentJP) +
-          mkContent('EN', a.contentEN) +
+          mkContent('TW', 'TW', a.contentTW) +
+          mkContent('CN', 'CN', a.contentCN) +
+          mkContent('JP', 'JP', a.contentJP) +
+          mkContent('EN', 'EN', a.contentEN) +
           '</div>';
       }
 
@@ -1019,11 +1043,6 @@ function renderList() {
           }
         }
       }
-
-      const imgUrl         = escUrl(_imgCache[a.date] || '');
-      const imgPreviewHtml = imgUrl
-        ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>`
-        : '<span style="color:#bbb;">尚無圖片</span>';
 
       const scheduleBadges = _getScheduleBadgesHtml(a.date, schedulesAll, id);
       _annMap.set(id, a); // 存入 Map，供 onclick 查詢
@@ -1049,10 +1068,6 @@ function renderList() {
   ${cardDateWarn}
   ${langTags}
   ${scheduleBadges ? `<div class="schedule-badges">${scheduleBadges}</div>` : ''}
-  <div class="ann-img-row" onclick="stopProp(event)">
-    <span id="img-preview-${id}">${imgPreviewHtml}</span>
-    <button class="ann-img-btn" onclick="openImgLibrary('${id}','${safeDate}','${safeType}','${safeMmdd}')">📂 管理圖片</button>
-  </div>
   ${contentHtml}
   ${!isDraft ? `
   <div class="ann-actions" onclick="stopProp(event)">
@@ -1852,16 +1867,17 @@ function _updateCardImgPreview(cardId, url) {
 
 // ══ MODULE: IMAGE LIBRARY ════════════════════════════════════════
 
-let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '';
+let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '', _imgLibLang = 'ALL';
 let _imgLibFolders    = [];
 let _currentTabIdx    = 0;
 let _isLoadingImgLib  = false;
 
-async function openImgLibrary(cardId, annDate, annType, mmdd) {
+async function openImgLibrary(cardId, annDate, annType, mmdd, lang) {
   _imgLibCardId  = cardId;
   _imgLibAnnDate = annDate;
   _imgLibAnnType = annType;
   _imgLibMmdd    = mmdd;
+  _imgLibLang    = lang || 'ALL';
 
   document.getElementById('modal-img-library').classList.add('open');
 
@@ -1874,15 +1890,32 @@ async function openImgLibrary(cardId, annDate, annType, mmdd) {
     ? [{ label: '維護圖片', folder: 'images/維護' }]
     : [{ label: `活動 ${mmdd}`, folder: `images/活動/${mmdd}` }];
 
-  const tabEl = document.getElementById('img-lib-tabs');
-  tabEl.innerHTML = folders.map((f, i) => `
-    <button onclick="switchImgLibTab(${i})" id="img-lib-tab-${i}"
-      style="padding:5px 14px;border-radius:8px;border:1px solid #e5e7eb;cursor:pointer;font-size:0.85rem;background:${i===0?'#6366f1':'white'};color:${i===0?'white':'#374151'};">
-      ${escHtml(f.label)}
-    </button>`).join('');
+  // 語系 tab（活動公告才顯示）
+  const langTabEl = document.getElementById('img-lib-lang-tabs');
+  if (langTabEl) {
+    if (!isMaint) {
+      const langs = ['ALL', 'TW', 'CN', 'JP', 'EN'];
+      langTabEl.style.display = 'flex';
+      langTabEl.innerHTML = langs.map(l => `
+        <button onclick="switchImgLangTab('${l}')" id="img-lib-lang-${l}"
+          class="img-lib-lang-btn${l === _imgLibLang ? ' active' : ''}">
+          ${l === 'ALL' ? '全部' : l}
+        </button>`).join('');
+    } else {
+      langTabEl.style.display = 'none';
+      langTabEl.innerHTML = '';
+    }
+  }
 
   _imgLibFolders = folders;
   switchImgLibTab(0);
+}
+
+function switchImgLangTab(lang) {
+  _imgLibLang = lang;
+  document.querySelectorAll('.img-lib-lang-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.id === 'img-lib-lang-' + lang);
+  });
 }
 
 async function switchImgLibTab(idx) {
