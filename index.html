@@ -268,7 +268,14 @@ body {
 }
 
 /* ── 圖片庫選取狀態 ── */
-.img-lib-thumb.selected { border-color: #6366f1; }
+.img-lib-thumb { position: relative; }
+.img-lib-thumb.selected { border-color: #6366f1; border-width: 3px; }
+.img-lib-thumb.selected::after {
+  content: '✓'; position: absolute; top: 4px; right: 4px;
+  background: #6366f1; color: white; font-size: 0.7rem; font-weight: 700;
+  width: 18px; height: 18px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
 .img-lib-selected-preview {
   margin-top: 10px; padding: 10px; background: #f5f3ff;
   border: 1px solid #c4b5fd; border-radius: 8px;
@@ -1865,7 +1872,7 @@ async function openImgLibrary(cardId, annDate, annType, mmdd) {
   const isMaint = annType.includes('維護');
   const folders = isMaint
     ? [{ label: '維護圖片', folder: 'images/維護' }]
-    : [{ label: `活動 ${annDate}`, folder: `images/活動/${mmdd}` }];
+    : [{ label: `活動 ${mmdd}`, folder: `images/活動/${mmdd}` }];
 
   const tabEl = document.getElementById('img-lib-tabs');
   tabEl.innerHTML = folders.map((f, i) => `
@@ -2031,9 +2038,20 @@ async function confirmUploadImg() {
     const synced = await _syncImgCacheToGitHub();
     _updateCardImgPreview(_imgLibCardId, rawUrl);
     statusEl.textContent = '✅ 上傳成功，已自動套用';
-    // 重置 flag 後才能重新整理列表
-    _isLoadingImgLib = false;
-    await switchImgLibTab(folderIdx);
+    // 直接把新圖插入 grid，不等 GitHub CDN 快取更新
+    const grid = document.getElementById('img-lib-grid');
+    const empty = document.getElementById('img-lib-empty');
+    if (grid) {
+      const safeUrl  = escUrl(rawUrl);
+      const safeName = escHtml(_uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, '_'));
+      const newThumb = document.createElement('div');
+      newThumb.className = 'img-lib-thumb';
+      newThumb.innerHTML = `<img src="${safeUrl}" loading="lazy"><div class="img-lib-name" title="${safeName}">${safeName}</div>`;
+      newThumb.onclick = () => selectImgFromLibrary(safeUrl, safeName);
+      grid.style.display = 'grid';
+      if (empty) empty.style.display = 'none';
+      grid.prepend(newThumb);
+    }
     clearUploadPreview();
     if (!synced) toast('⚠️ 上傳成功，但同步失敗，其他裝置可能看不到');
   } catch (e) {
