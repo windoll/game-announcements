@@ -1543,15 +1543,7 @@ function switchImgLangTab(lang) {
   document.querySelectorAll('.img-lib-lang-btn').forEach(btn => {
     btn.classList.toggle('active', btn.id === 'img-lib-lang-' + lang);
   });
-  // 重新 highlight 該語系已套用的圖
-  const currentImg = _getImgUrl(_imgLibAnnDate, lang, _imgLibAnnType);
-  document.querySelectorAll('.img-lib-thumb').forEach(el => {
-    const img = el.querySelector('img');
-    const isActive = currentImg && img && img.src.split('?')[0] === currentImg.split('?')[0];
-    el.classList.toggle('selected', isActive);
-  });
-  _imgLibSelectedUrl = currentImg || '';
-  document.getElementById('btn-img-lib-apply').disabled = !_imgLibSelectedUrl;
+  _imgLibLoadFolder(_imgLibCurrentFolder);
 }
 
 async function _imgLibLoadFolder(folder) {
