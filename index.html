@@ -582,7 +582,7 @@ function renderList() {
 
       const mkCheck = (code, val, imgUrl, annDate, annType) => {
         const imgHtml = imgUrl
-          ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link" onclick="stopProp(event)">🖼 查看圖片</a><span class="lang-img-clear" onclick="stopProp(event);clearAnnImg('${escHtml(annDate)}','${escHtml((annType||'').replace(/'/g,''))}','${code}')" title="清除此語系圖片">✕</span>`
+          ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link" onclick="stopProp(event)">🖼 查看圖片</a><span class="lang-img-clear" data-date="${escHtml(annDate)}" data-type="${escHtml(annType||'')}" data-lang="${code}" onclick="stopProp(event);clearAnnImg(this.dataset.date,this.dataset.type,this.dataset.lang)" title="清除此語系圖片">✕</span>`
           : '<span class="lang-img-empty">尚無圖片</span>';
         const ok = val && imgUrl;
         const checkHtml = ok
@@ -1346,7 +1346,7 @@ function _getImgUrl(annDate, lang, annType) {
   const entry = _imgCache[key] || _imgCache[annDate]; // 舊 key 相容
   if (!entry) return '';
   if (typeof entry === 'string') return entry;
-  return entry[lang] || entry['ALL'] || entry['TW'] || entry['CN'] || entry['JP'] || entry['EN'] || '';
+  return entry[lang] || entry['ALL'] || '';
 }
 
 // 設定指定語系的圖片 URL
