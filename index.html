@@ -582,11 +582,16 @@ function renderList() {
 
       const mkCheck = (code, val, imgUrl) => {
         const imgHtml = imgUrl
-          ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link" onclick="stopProp(event)">🖼</a>`
-          : '<span class="lang-img-empty">✗圖</span>';
-        return val
-          ? `<div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span>${imgHtml}<span class="lang-title-text">${escHtml(val)}</span></div>`
-          : `<div class="lang-row"><span class="lang-check lang-no">${code} ✗</span>${imgHtml}<span class="lang-title-text lang-empty">未填寫</span></div>`;
+          ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link" onclick="stopProp(event)">🖼 查看圖片</a>`
+          : '<span class="lang-img-empty">尚無圖片</span>';
+        const ok = val && imgUrl;
+        const checkHtml = ok
+          ? `<span class="lang-check lang-ok">${code} ✓</span>`
+          : `<span class="lang-check lang-no">${code} ✗</span>`;
+        const titleHtml = val
+          ? `<span class="lang-title-text">${escHtml(val)}</span>`
+          : `<span class="lang-title-text lang-empty">未填寫</span>`;
+        return `<div class="lang-row">${checkHtml}${imgHtml}${titleHtml}</div>`;
       };
       const langTags =
         '<hr class="lang-divider">' +
@@ -1542,13 +1547,15 @@ function switchImgLangTab(lang) {
   document.querySelectorAll('.img-lib-lang-btn').forEach(btn => {
     btn.classList.toggle('active', btn.id === 'img-lib-lang-' + lang);
   });
-}
-
-function switchImgLangTab(lang) {
-  _imgLibLang = lang;
-  document.querySelectorAll('.img-lib-lang-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.id === 'img-lib-lang-' + lang);
+  // 重新 highlight 該語系已套用的圖
+  const currentImg = _getImgUrl(_imgLibAnnDate, lang, _imgLibAnnType);
+  document.querySelectorAll('.img-lib-thumb').forEach(el => {
+    const img = el.querySelector('img');
+    const isActive = currentImg && img && img.src.split('?')[0] === currentImg.split('?')[0];
+    el.classList.toggle('selected', isActive);
   });
+  _imgLibSelectedUrl = currentImg || '';
+  document.getElementById('btn-img-lib-apply').disabled = !_imgLibSelectedUrl;
 }
 
 async function switchImgLibTab(idx) {
@@ -1577,7 +1584,12 @@ async function switchImgLibTab(idx) {
   if (!token) { loading.textContent = '請先在設定頁填入 GitHub Token'; _isLoadingImgLib = false; return; }
 
   try {
-    const imgs = await _githubListImages(token, folder);
+    let imgs = await _githubListImages(token, folder);
+    // 合併剛上傳但 API 還沒更新的圖片
+    const recent = _recentUploads[folder] || [];
+    recent.forEach(r => {
+      if (!imgs.find(img => img.name === r.name)) imgs = [r, ...imgs];
+    });
     loading.style.display = 'none';
 
     if (!imgs.length) {
@@ -1615,6 +1627,7 @@ async function switchImgLibTab(idx) {
 
 let _imgLibSelectedUrl = '';
 let _uploadFile = null; // 待上傳的 File 物件
+const _recentUploads = {}; // folder → [{name, url}]，補 GitHub API 快取延遲
 
 function selectImgFromLibrary(url, name) {
   _imgLibSelectedUrl = url;
@@ -1634,14 +1647,7 @@ function selectImgFromLibrary(url, name) {
 
 async function applySelectedImg() {
   if (!_imgLibSelectedUrl) return;
-  // 先設定當前語系
   _setImgUrl(_imgLibAnnDate, _imgLibLang, _imgLibSelectedUrl, _imgLibAnnType);
-  // 若其他語系沒有圖，也填入同一張
-  ['TW', 'CN', 'JP', 'EN'].forEach(l => {
-    if (!_getImgUrl(_imgLibAnnDate, l, _imgLibAnnType)) {
-      _setImgUrl(_imgLibAnnDate, l, _imgLibSelectedUrl, _imgLibAnnType);
-    }
-  });
   _saveImgCache();
   const synced = await _syncImgCacheToGitHub();
   closeImgLibrary();
@@ -1715,13 +1721,11 @@ async function confirmUploadImg() {
   try {
     const rawUrl = await _githubPut(token, path, base64);
     _setImgUrl(_imgLibAnnDate, _imgLibLang, rawUrl, _imgLibAnnType);
-    // 若其他語系沒有圖，也填入同一張
-    ['TW', 'CN', 'JP', 'EN'].forEach(l => {
-      if (!_getImgUrl(_imgLibAnnDate, l, _imgLibAnnType)) {
-        _setImgUrl(_imgLibAnnDate, l, rawUrl, _imgLibAnnType);
-      }
-    });
     _saveImgCache();
+    // 記錄到 recentUploads，避免 GitHub API 快取延遲導致重新開啟看不到
+    if (!_recentUploads[folder]) _recentUploads[folder] = [];
+    _recentUploads[folder] = _recentUploads[folder].filter(r => r.name !== safeName);
+    _recentUploads[folder].unshift({ name: safeName, url: rawUrl });
     const synced = await _syncImgCacheToGitHub();
     statusEl.textContent = '✅ 上傳成功，已自動套用';
     // 直接把新圖插入 grid，不等 GitHub CDN 快取更新
