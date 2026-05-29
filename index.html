@@ -10,8 +10,6 @@
   --primary-hover: #4338ca;
   --green: #10b981;
   --yellow: #f59e0b;
-  --red: #ef4444;
-  --gray: #6b7280;
   --bg: #f5f6fa;
   --card: #ffffff;
   --border: #e5e7eb;
@@ -105,7 +103,6 @@ body {
 .dot-upcoming { background: var(--yellow); }
 .dot-past     { background: #d1d5db; }
 .ann-title { font-size: 1rem; font-weight: 600; margin-top: 8px; }
-.ann-others { font-size: 0.78rem; color: var(--text-sub); margin-top: 4px; }
 .lang-divider { border: none; border-top: 1px solid var(--border); margin: 6px 0 6px; }
 .lang-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
 .lang-check { font-size: 0.72rem; font-weight: 600; padding: 1px 7px; border-radius: 20px; flex-shrink: 0; }
@@ -129,11 +126,6 @@ body {
   border-top: 1px solid #f0f0f0; padding-top: 12px;
 }
 .ann-card.open .ann-content { display: block; }
-.content-lang {
-  font-size: 0.72rem; font-weight: 700; color: #aaa;
-  letter-spacing: 0.05em; margin: 10px 0 4px;
-}
-.content-lang:first-child { margin-top: 0; }
 .content-text {
   font-size: 0.85rem; line-height: 1.7; color: #333;
   white-space: pre-wrap; background: #f9fafb;
@@ -154,16 +146,6 @@ body {
 .btn-outline { background: white; color: var(--text); border: 1px solid var(--border); }
 .btn-sm { padding: 6px 12px; font-size: 0.78rem; }
 
-/* ── 時間輸入 ── */
-.time-input-row {
-  display: flex; align-items: center; gap: 8px; margin-top: 10px;
-}
-.time-input-row input[type=time] {
-  border: 1px solid var(--border); border-radius: 8px;
-  padding: 7px 10px; font-size: 0.85rem; outline: none;
-  background: var(--card);
-}
-.time-input-row input[type=time]:focus { border-color: #a5b4fc; }
 
 /* ── 通知 toast ── */
 #toast {
@@ -290,6 +272,7 @@ body {
           <option value="past">過去</option>
         </select>
         <button class="btn btn-outline btn-sm" onclick="loadSheet()">↻ 重新整理</button>
+        <button class="btn btn-outline btn-sm" id="btn-sync-img" onclick="syncImgCache()">🖼 同步圖片</button>
       </div>
 
       <div id="list-area">
@@ -544,7 +527,8 @@ async function checkPassword() {
 // 統一初始化入口（解鎖後或 session 已解鎖時呼叫）
 function initApp() {
   applyTestModeUI(!!getCfg().testMode);
-  _loadImgCacheFromGitHub();
+  // 快取無效時才在初始化時預先拉取，有效則等 loadSheet 後再判斷
+  if (!_imgCacheIsValid()) _loadImgCacheFromGitHub();
 }
 
 // ══ MODULE: STATE ════════════════════════════════════════════════
@@ -587,7 +571,6 @@ async function loadSheet() {
       date:      headers.indexOf('日期'),
       time:      headers.indexOf('時間'),
       type:      headers.indexOf('公告類型'),
-      image:     headers.indexOf('圖片'),
       titleTW:   headers.indexOf('繁中標題'),
       contentTW: headers.indexOf('繁中內容'),
       titleCN:   headers.indexOf('簡中標題'),
@@ -597,7 +580,7 @@ async function loadSheet() {
       titleEN:   headers.indexOf('英文標題'),
       contentEN: headers.indexOf('英文內容'),
     };
-    if (ix.date === -1) Object.assign(ix, {date:0,time:1,type:2,image:3,titleTW:4,contentTW:5,titleCN:-1,contentCN:-1,titleJP:6,contentJP:7,titleEN:8,contentEN:9});
+    if (ix.date === -1) Object.assign(ix, {date:0,time:1,type:2,titleTW:3,contentTW:4,titleCN:-1,contentCN:-1,titleJP:5,contentJP:6,titleEN:7,contentEN:8});
 
     const getDate = (row, i) => {
       if (i < 0 || !row.c || !row.c[i] || row.c[i].v === null) return '';
@@ -626,7 +609,7 @@ async function loadSheet() {
     allData = (tbl.rows || [])
       .map(row => ({
         date: getDate(row, ix.date), time: getTime(row, ix.time),
-        type: get(row, ix.type),     image: get(row, ix.image),
+        type: get(row, ix.type),
         titleTW: get(row, ix.titleTW),   contentTW: get(row, ix.contentTW),
         titleCN: get(row, ix.titleCN),   contentCN: get(row, ix.contentCN),
         titleJP: get(row, ix.titleJP),   contentJP: get(row, ix.contentJP),
@@ -637,6 +620,8 @@ async function loadSheet() {
     document.getElementById('list-updated').textContent =
       `上次更新：${new Date().toLocaleString('zh-TW')}`;
     renderList();
+    // 快取當天有效則直接用，否則重新拉 GitHub
+    if (!_imgCacheIsValid()) _loadImgCacheFromGitHub();
   } catch (e) {
     document.getElementById('list-area').innerHTML =
       `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;color:#991b1b;font-size:0.85rem;">
@@ -815,7 +800,7 @@ function renderList() {
       }
 
       // 圖片預覽（escUrl 防 XSS）
-      const imgUrl        = escUrl(_imgCache[a.date] || (a.image && a.image !== '...' ? a.image : ''));
+      const imgUrl        = escUrl(_imgCache[a.date] || '');
       const imgPreviewHtml = imgUrl
         ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" style="color:#6366f1;text-decoration:none;">🖼 查看圖片</a>`
         : '<span style="color:#bbb;">尚無圖片</span>';
@@ -885,7 +870,6 @@ function openSendModal(ann, defaultTime) {
   if (ann.titleJP || ann.contentJP) content.push([ann.titleJP, ann.contentJP].filter(Boolean).join('\n'));
   if (ann.titleEN || ann.contentEN) content.push([ann.titleEN, ann.contentEN].filter(Boolean).join('\n'));
   let contentStr = content.join('\n\n---\n\n');
-  if (ann.image && ann.image !== '...') contentStr += '\n\n' + ann.image;
 
   const cfg = getCfg();
   const announcementTypes = (cfg.testMode ? cfg.testAnnouncementTypes : cfg.announcementTypes) || [];
@@ -1496,6 +1480,21 @@ function _saveImgCache() {
   localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
 }
 
+// 快取時間戳：當天有效（到午夜失效）
+function _imgCacheIsValid() {
+  const ts = localStorage.getItem('ann-img-cache-ts');
+  if (!ts) return false;
+  const saved = new Date(parseInt(ts, 10));
+  const now   = new Date();
+  return saved.getFullYear() === now.getFullYear() &&
+         saved.getMonth()    === now.getMonth()    &&
+         saved.getDate()     === now.getDate();
+}
+
+function _markImgCacheFetched() {
+  localStorage.setItem('ann-img-cache-ts', Date.now().toString());
+}
+
 async function _syncImgCacheToGitHub() {
   const token = getCfg().githubToken;
   if (!token) return;
@@ -1508,21 +1507,30 @@ async function _syncImgCacheToGitHub() {
 }
 
 async function _loadImgCacheFromGitHub() {
-  const token = getCfg().githubToken;
-  if (!token) return;
   try {
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/images/index.json`, {
-      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
-    });
+    // 使用 raw URL，不需要 token 也沒有 rate limit
+    const res = await fetch(
+      `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/images/index.json?t=${Date.now()}`
+    );
     if (!res.ok) return;
-    const data = await res.json();
-    const json = JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
+    const json = await res.json();
     Object.assign(_imgCache, json);
     _saveImgCache();
+    _markImgCacheFetched();
     if (allData.length) renderList();
   } catch (e) {
     console.warn('載入 index.json 失敗', e);
   }
+}
+
+// 手動強制重新拉取圖片快取
+async function syncImgCache() {
+  const btn = document.getElementById('btn-sync-img');
+  if (btn) { btn.disabled = true; btn.textContent = '同步中…'; }
+  localStorage.removeItem('ann-img-cache-ts'); // 強制讓快取失效
+  await _loadImgCacheFromGitHub();
+  if (btn) { btn.disabled = false; btn.textContent = '🖼 同步圖片'; }
+  toast('✅ 圖片已同步');
 }
 
 function _imgFolder(annType, mmdd) {
@@ -1607,7 +1615,6 @@ function _updateCardImgPreview(cardId, url) {
 // ══ MODULE: IMAGE LIBRARY ════════════════════════════════════════
 
 let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '';
-let _imgLibActiveFolder = '';
 
 async function openImgLibrary(cardId, annDate, annType, mmdd) {
   _imgLibCardId  = cardId;
@@ -1642,7 +1649,6 @@ async function switchImgLibTab(idx) {
   });
 
   const folder = window._imgLibFolders[idx].folder;
-  _imgLibActiveFolder = folder;
 
   const grid    = document.getElementById('img-lib-grid');
   const empty   = document.getElementById('img-lib-empty');
@@ -1713,6 +1719,7 @@ Object.assign(window, {
   addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
   uploadImageToGitHub, openImgLibrary, switchImgLibTab, selectImgFromLibrary, closeImgLibrary,
+  syncImgCache,
 });
 
 })(); // end IIFE
