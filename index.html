@@ -1920,15 +1920,28 @@ async function switchImgLibTab(idx) {
     }
 
     grid.style.display = 'grid';
+    const currentImg = _imgCache[_imgLibAnnDate] || '';
     grid.innerHTML = imgs.map(img => {
       const safeUrl  = escUrl(img.url);
       const safeName = escHtml(img.name);
+      // 比對 URL（去掉 query string 後比對）
+      const isActive = currentImg && safeUrl.split('?')[0] === escUrl(currentImg).split('?')[0];
       return `
-      <div class="img-lib-thumb" onclick="selectImgFromLibrary('${safeUrl}','${safeName}')">
+      <div class="img-lib-thumb${isActive ? ' selected' : ''}" onclick="selectImgFromLibrary('${safeUrl}','${safeName}')">
         <img src="${safeUrl}" loading="lazy">
         <div class="img-lib-name" title="${safeName}">${safeName}</div>
       </div>`;
     }).join('');
+
+    // 如果有已套用的圖片，同步更新選取狀態
+    if (currentImg) {
+      const activeUrl = escUrl(currentImg).split('?')[0];
+      const activeImg = imgs.find(img => escUrl(img.url).split('?')[0] === activeUrl);
+      if (activeImg) {
+        _imgLibSelectedUrl = escUrl(activeImg.url);
+        document.getElementById('btn-img-lib-apply').disabled = false;
+      }
+    }
   } finally {
     _isLoadingImgLib = false;
   }
