@@ -1846,8 +1846,9 @@ function _updateCardImgPreview(cardId, url) {
 // ══ MODULE: IMAGE LIBRARY ════════════════════════════════════════
 
 let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '';
-let _imgLibFolders = [];
-let _isLoadingImgLib = false;
+let _imgLibFolders    = [];
+let _currentTabIdx    = 0;
+let _isLoadingImgLib  = false;
 
 async function openImgLibrary(cardId, annDate, annType, mmdd) {
   _imgLibCardId  = cardId;
@@ -1880,6 +1881,7 @@ async function openImgLibrary(cardId, annDate, annType, mmdd) {
 async function switchImgLibTab(idx) {
   if (_isLoadingImgLib) return;
   _isLoadingImgLib = true;
+  _currentTabIdx   = idx;
 
   _imgLibFolders.forEach((_, i) => {
     const btn = document.getElementById('img-lib-tab-' + i);
@@ -2008,10 +2010,7 @@ async function confirmUploadImg() {
   uploadBtn.textContent = '上傳中…';
   statusEl.textContent  = '';
 
-  // 上傳到目前選中的分頁資料夾
-  const currentTabIdx = Array.from(document.querySelectorAll('.img-lib-tabs button'))
-    .findIndex(btn => btn.style.background === 'rgb(99, 102, 241)');
-  const folderIdx = currentTabIdx >= 0 ? currentTabIdx : 0;
+  const folderIdx = _currentTabIdx;
   const folder    = _imgLibFolders[folderIdx]?.folder || _imgFolder(_imgLibAnnType, _imgLibMmdd);
 
   const safeName = _uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -2032,7 +2031,8 @@ async function confirmUploadImg() {
     const synced = await _syncImgCacheToGitHub();
     _updateCardImgPreview(_imgLibCardId, rawUrl);
     statusEl.textContent = '✅ 上傳成功，已自動套用';
-    // 重新整理圖片列表
+    // 重置 flag 後才能重新整理列表
+    _isLoadingImgLib = false;
     await switchImgLibTab(folderIdx);
     clearUploadPreview();
     if (!synced) toast('⚠️ 上傳成功，但同步失敗，其他裝置可能看不到');
