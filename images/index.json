@@ -1,3 +1,7 @@
 {
-
+  "6/10_維護預告": {
+    "TW": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_TW.jpg",
+    "EN": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_EN.jpg",
+    "JP": "https://raw.githubusercontent.com/windoll/game-announcements/main/images/維護/Maintenance_JP.jpg"
+  }
 }
