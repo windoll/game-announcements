@@ -192,7 +192,7 @@
       <div class="img-lib-upload-preview" id="img-lib-upload-preview" style="display:none;">
         <img id="img-lib-upload-preview-img" src="">
         <div class="img-lib-upload-preview-info">
-          <div id="img-lib-upload-preview-name" class="img-lib-upload-preview-name"></div>
+          <input id="img-lib-upload-filename" class="img-lib-upload-filename cfg-input" type="text" placeholder="檔名">
           <div id="img-lib-upload-preview-size" class="img-lib-upload-preview-size"></div>
         </div>
         <button class="img-lib-upload-clear" onclick="clearUploadPreview()" title="取消選取">✕</button>
@@ -1514,36 +1514,46 @@ let _imgLibCurrentFolder = 'images';
 let _isLoadingImgLib = false;
 let _imgLibSelectedUrl = '';
 let _uploadFile = null;
+let _imgLibDirMemory = {}; // annDate_annType → 上次瀏覽的資料夾
+let _imgLibDirty = false;  // 是否有套用尚未同步
+
+function _imgLibMemKey() { return `${_imgLibAnnDate}_${_imgLibAnnType}`; }
+
+function _imgLibRenderLangTabs() {
+  const langTabEl = document.getElementById('img-lib-lang-tabs');
+  if (!langTabEl) return;
+  langTabEl.style.display = 'flex';
+  langTabEl.innerHTML = ['TW','CN','JP','EN'].map(l => {
+    const hasImg = !!_getImgUrl(_imgLibAnnDate, l, _imgLibAnnType);
+    const dot = hasImg ? '<span class="lang-tab-dot lang-tab-dot-on"></span>' : '<span class="lang-tab-dot"></span>';
+    return `<button onclick="switchImgLangTab('${l}')" id="img-lib-lang-${l}"
+      class="img-lib-lang-btn${l === _imgLibLang ? ' active' : ''}">${dot}${l}</button>`;
+  }).join('');
+}
 
 async function openImgLibrary(cardId, annDate, annType, mmdd, lang) {
-  _imgLibCardId        = cardId;
-  _imgLibAnnDate       = annDate;
-  _imgLibAnnType       = annType;
-  _imgLibLang          = (lang && lang !== 'ALL') ? lang : 'TW';
-  _imgLibCurrentFolder = 'images';
-  _imgLibSelectedUrl   = '';
+  _imgLibCardId      = cardId;
+  _imgLibAnnDate     = annDate;
+  _imgLibAnnType     = annType;
+  _imgLibLang        = (lang && lang !== 'ALL') ? lang : 'TW';
+  _imgLibSelectedUrl = '';
+  _imgLibDirty       = false;
+
+  // 記住上次瀏覽位置，沒有就從根目錄開始
+  _imgLibCurrentFolder = _imgLibDirMemory[_imgLibMemKey()] || 'images';
 
   document.getElementById('modal-img-library').classList.add('open');
+  document.getElementById('img-lib-upload-area').style.display = 'block';
 
-  const langTabEl = document.getElementById('img-lib-lang-tabs');
-  if (langTabEl) {
-    langTabEl.style.display = 'flex';
-    langTabEl.innerHTML = ['TW','CN','JP','EN'].map(l =>
-      `<button onclick="switchImgLangTab('${l}')" id="img-lib-lang-${l}"
-        class="img-lib-lang-btn${l === _imgLibLang ? ' active' : ''}">${l}</button>`
-    ).join('');
-  }
-
+  _imgLibRenderLangTabs();
   clearUploadPreview();
-  await _imgLibLoadFolder('images');
+  await _imgLibLoadFolder(_imgLibCurrentFolder);
 }
 
 function switchImgLangTab(lang) {
   _imgLibLang = lang;
-  document.querySelectorAll('.img-lib-lang-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.id === 'img-lib-lang-' + lang);
-  });
-  if (_isLoadingImgLib) return; // 載入中忽略，避免競態
+  _imgLibRenderLangTabs();
+  if (_isLoadingImgLib) return;
   _imgLibLoadFolder(_imgLibCurrentFolder);
 }
 
@@ -1552,6 +1562,7 @@ async function _imgLibLoadFolder(folder) {
   _isLoadingImgLib     = true;
   _imgLibCurrentFolder = folder;
   _imgLibSelectedUrl   = '';
+  _imgLibDirMemory[_imgLibMemKey()] = folder; // 記住此公告的瀏覽位置
 
   const grid     = document.getElementById('img-lib-grid');
   const empty    = document.getElementById('img-lib-empty');
@@ -1634,14 +1645,15 @@ function selectImgFromLibrary(url, name) {
   document.getElementById('btn-img-lib-apply').disabled = false;
 }
 
-async function applySelectedImg() {
+function applySelectedImg() {
   if (!_imgLibSelectedUrl) return;
   _setImgUrl(_imgLibAnnDate, _imgLibLang, _imgLibSelectedUrl, _imgLibAnnType);
   _saveImgCache();
-  const synced = await _syncImgCacheToGitHub();
-  closeImgLibrary();
-  renderList();
-  toast(synced ? `✅ 已套用圖片到 ${_imgLibLang}` : '⚠️ 已套用圖片，但同步失敗，其他裝置可能看不到');
+  _imgLibDirty = true;
+  _imgLibRenderLangTabs(); // 更新圓點
+  toast(`✅ 已套用圖片到 ${_imgLibLang}`);
+  // 重新載入以更新 highlight
+  _imgLibLoadFolder(_imgLibCurrentFolder);
 }
 
 // 選檔後顯示預覽，不立即上傳
@@ -1652,7 +1664,6 @@ function previewUploadFile(event) {
 
   const previewWrap = document.getElementById('img-lib-upload-preview');
   const previewImg  = document.getElementById('img-lib-upload-preview-img');
-  const previewName = document.getElementById('img-lib-upload-preview-name');
   const previewSize = document.getElementById('img-lib-upload-preview-size');
   const uploadLabel = document.getElementById('img-lib-upload-label');
   const uploadBtn   = document.getElementById('btn-img-lib-upload');
@@ -1661,7 +1672,7 @@ function previewUploadFile(event) {
   reader.onload = e => { previewImg.src = e.target.result; };
   reader.readAsDataURL(file);
 
-  previewName.textContent = file.name;
+  document.getElementById('img-lib-upload-filename').value = file.name;
   previewSize.textContent = (file.size / 1024).toFixed(1) + ' KB';
   previewWrap.style.display = 'flex';
   uploadLabel.style.display = 'none';
@@ -1680,6 +1691,8 @@ function clearUploadPreview() {
   if (uploadLabel) uploadLabel.style.display = 'inline-flex';
   if (uploadBtn)   { uploadBtn.style.display = 'none'; uploadBtn.disabled = true; }
   if (input)       input.value = '';
+  const fnInput = document.getElementById('img-lib-upload-filename');
+  if (fnInput) fnInput.value = '';
   document.getElementById('img-lib-upload-status').textContent = '';
 }
 
@@ -1694,7 +1707,8 @@ async function confirmUploadImg() {
   uploadBtn.textContent = '上傳中…';
   statusEl.textContent  = '';
 
-  const safeName = _uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const inputName = document.getElementById('img-lib-upload-filename').value.trim() || _uploadFile.name;
+  const safeName  = inputName.replace(/[^a-zA-Z0-9._-]/g, '_');
   const path     = `${_imgLibCurrentFolder}/${safeName}`;
 
   const base64 = await new Promise((res, rej) => {
@@ -1705,9 +1719,14 @@ async function confirmUploadImg() {
   });
 
   try {
-    await _githubPut(token, path, base64);
-    statusEl.textContent = '✅ 上傳成功';
+    const rawUrl = await _githubPut(token, path, base64);
+    // 自動套用到當前語系
+    _setImgUrl(_imgLibAnnDate, _imgLibLang, rawUrl, _imgLibAnnType);
+    _saveImgCache();
+    _imgLibDirty = true;
+    statusEl.textContent = `✅ 上傳成功，已套用到 ${_imgLibLang}`;
     clearUploadPreview();
+    _imgLibRenderLangTabs();
     await _imgLibLoadFolder(_imgLibCurrentFolder);
   } catch (e) {
     statusEl.textContent  = '❌ 上傳失敗：' + e.message;
@@ -1716,7 +1735,7 @@ async function confirmUploadImg() {
   }
 }
 
-function closeImgLibrary() {
+async function closeImgLibrary() {
   _imgLibSelectedUrl = '';
   _uploadFile        = null;
   const preview = document.getElementById('img-lib-preview');
@@ -1725,6 +1744,12 @@ function closeImgLibrary() {
   if (applyBtn) applyBtn.disabled = true;
   clearUploadPreview();
   document.getElementById('modal-img-library').classList.remove('open');
+  renderList();
+  if (_imgLibDirty) {
+    _imgLibDirty = false;
+    const synced = await _syncImgCacheToGitHub();
+    if (!synced) toast('⚠️ 圖片已套用，但同步失敗，其他裝置可能看不到');
+  }
 }
 
 // ══ MODULE: IMG CACHE SYNC ═══════════════════════════════════════

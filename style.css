@@ -339,6 +339,11 @@ body {
 
 /* ── 圖片庫語系 tab ── */
 .img-lib-lang-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.lang-tab-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: #d1d5db; margin-right: 4px; vertical-align: middle;
+}
+.lang-tab-dot-on { background: #10b981; }
 .img-lib-lang-btn {
   padding: 3px 12px; border-radius: 20px; border: 1px solid var(--border);
   cursor: pointer; font-size: 0.78rem; font-weight: 600; background: white; color: #374151;
