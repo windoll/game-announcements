@@ -1,0 +1,11 @@
+{
+  "name": "game-announcements",
+  "version": "1.0.0",
+  "description": "雀星公告管理網站",
+  "scripts": {
+    "test": "node --test tests/unit.test.mjs",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --headed"
+  },
+  "license": "ISC"
+}

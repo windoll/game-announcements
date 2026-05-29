@@ -642,6 +642,7 @@ function initApp() {
 
 let allData    = [];
 let pendingAnn = null;
+const _annMap  = new Map(); // cardId → 公告物件，供 onclick 查詢用
 
 // Send Modal 暫存（原本掛在 window，改為 IIFE 內部變數）
 let _modalAnn      = null;
@@ -890,8 +891,7 @@ function renderList() {
         mkCheck('JP', a.titleJP) +
         mkCheck('EN', a.titleEN);
 
-      const isDraft     = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
-      const defaultTime = a.time || '10:00';
+      const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
 
       const mkContent = (code, val) => val
         ? `<div class="content-block"><div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span></div><div class="content-text">${escHtml(val)}</div></div>`
@@ -928,7 +928,7 @@ function renderList() {
         : '<span style="color:#bbb;">尚無圖片</span>';
 
       const scheduleBadges = _getScheduleBadgesHtml(a.date, schedulesAll);
-      const annJson        = escHtml(JSON.stringify(a));
+      _annMap.set(id, a); // 存入 Map，供 onclick 查詢
       const safeType       = escHtml((a.type || '').replace(/'/g, ''));
       const safeMmdd       = escHtml((a.date || '').replace(/\//g, ''));
       const safeDate       = escHtml(a.date || '');
@@ -958,10 +958,10 @@ function renderList() {
   ${contentHtml}
   ${!isDraft && st !== 'past' ? `
   <div class="ann-actions" onclick="stopProp(event)">
-    <button class="btn btn-green btn-sm" onclick="openSendModal(${annJson}, '${escHtml(defaultTime)}')">
+    <button class="btn btn-green btn-sm" onclick="openSendModal('${id}')">
       ✈️ 發送到 Discord
     </button>
-    ${a.type && a.type.includes('活動') ? `<button class="btn btn-outline btn-sm" onclick="buildErolabsDocs(${annJson})">
+    ${a.type && a.type.includes('活動') ? `<button class="btn btn-outline btn-sm" onclick="buildErolabsDocs('${id}')">
       📄 建立 Erolabs 公告
     </button>` : ''}
   </div>` : ''}
@@ -979,8 +979,11 @@ function toggleCard(id) {
 
 // ══ MODULE: SEND MODAL ═══════════════════════════════════════════
 
-function openSendModal(ann, defaultTime) {
+function openSendModal(cardId) {
+  const ann = _annMap.get(cardId);
+  if (!ann) return;
   pendingAnn = ann;
+  const defaultTime = ann.time || '10:00';
   const normalized = ann.date.replace(/^0?(\d+)\/0?(\d+)$/, '$1/$2');
   const parts = [ann.titleTW, ann.titleJP, ann.titleEN].filter(Boolean);
   const threadName = '【' + normalized + '】' + parts.join(' - ');
@@ -1438,7 +1441,9 @@ function importSettings(event) {
 let _erolabsAnn       = null;
 let _erolabsMaintList = [];
 
-function buildErolabsDocs(ann) {
+function buildErolabsDocs(cardId) {
+  const ann = _annMap.get(cardId);
+  if (!ann) return;
   _erolabsAnn = ann;
 
   const annDateObj = parseDate(ann.date, '00:00');
@@ -1726,6 +1731,7 @@ function _updateCardImgPreview(cardId, url) {
 // ══ MODULE: IMAGE LIBRARY ════════════════════════════════════════
 
 let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibMmdd = '';
+let _imgLibFolders = [];
 let _isLoadingImgLib = false;
 
 async function openImgLibrary(cardId, annDate, annType, mmdd) {
@@ -1748,7 +1754,7 @@ async function openImgLibrary(cardId, annDate, annType, mmdd) {
       ${escHtml(f.label)}
     </button>`).join('');
 
-  window._imgLibFolders = folders;
+  _imgLibFolders = folders;
   switchImgLibTab(0);
 }
 
@@ -1756,14 +1762,14 @@ async function switchImgLibTab(idx) {
   if (_isLoadingImgLib) return;
   _isLoadingImgLib = true;
 
-  window._imgLibFolders.forEach((_, i) => {
+  _imgLibFolders.forEach((_, i) => {
     const btn = document.getElementById('img-lib-tab-' + i);
     if (!btn) return;
     btn.style.background = i === idx ? '#6366f1' : 'white';
     btn.style.color      = i === idx ? 'white'   : '#374151';
   });
 
-  const folder  = window._imgLibFolders[idx].folder;
+  const folder  = _imgLibFolders[idx].folder;
   const grid    = document.getElementById('img-lib-grid');
   const empty   = document.getElementById('img-lib-empty');
   const loading = document.getElementById('img-lib-loading');
