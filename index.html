@@ -1543,6 +1543,7 @@ function switchImgLangTab(lang) {
   document.querySelectorAll('.img-lib-lang-btn').forEach(btn => {
     btn.classList.toggle('active', btn.id === 'img-lib-lang-' + lang);
   });
+  if (_isLoadingImgLib) return; // 載入中忽略，避免競態
   _imgLibLoadFolder(_imgLibCurrentFolder);
 }
 
