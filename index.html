@@ -1370,8 +1370,7 @@ async function _syncImgCacheToGitHub() {
   if (!token) { _isSyncingImgCache = false; _setSyncStatus('error'); return false; }
   try {
     const jsonStr = JSON.stringify(_imgCache, null, 2);
-    const bytes = new TextEncoder().encode(jsonStr);
-    const content = btoa(String.fromCharCode(...bytes));
+    const content = btoa(encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
     await _githubPut(token, 'images/index.json', content);
     _imgCacheDirty = false;
     _setSyncStatus('clean');
