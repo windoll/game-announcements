@@ -29,6 +29,8 @@
     <div id="test-mode-banner" style="display:none;">🧪 測試模式中</div>
     <button class="nav-btn active" onclick="showPage('list', event)">📋 公告列表</button>
     <button class="nav-btn" onclick="showPage('settings', event)">⚙️ 設定</button>
+    <div style="flex:1;"></div>
+    <div id="sync-status" class="sync-status sync-clean" style="display:none;" onclick="syncStatusClick()"></div>
   </nav>
 
   <!-- 主內容 -->
@@ -836,8 +838,6 @@ async function confirmSend() {
   const hourVal = document.getElementById('modal-time-h').value;
   const minVal  = document.getElementById('modal-time-m').value;
   if (!dateVal || !hourVal || !minVal) { toast('⚠️ 請選擇發送日期與時間'); return; }
-  // 發送前同步圖片 cache
-  _syncImgCacheToGitHub();
   const timeVal = hourVal + ':' + minVal;
 
   const [mm, dd] = dateVal.split('/').map(Number);
@@ -1310,6 +1310,7 @@ const _imgCache = JSON.parse(localStorage.getItem('ann-img-cache') || '{}');
 function _saveImgCache() {
   localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
   _imgCacheDirty = true;
+  _setSyncStatus('dirty');
 }
 
 // 產生 imgCache key（日期 + 類型，避免同日期不同類型互相覆蓋）
@@ -1355,19 +1356,36 @@ function _markImgCacheFetched() {
   localStorage.setItem('ann-img-cache-ts', Date.now().toString());
 }
 
+function _setSyncStatus(state) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  el.className = 'sync-status sync-' + state;
+  el.style.display = '';
+  const labels = { dirty: '未同步', clean: '已同步', error: '同步失敗，點此重試', ing: '同步中…' };
+  el.textContent = labels[state] || '';
+  if (state === 'clean') setTimeout(() => { if (el.className.includes('clean')) el.style.display = 'none'; }, 3000);
+}
+
+function syncStatusClick() {
+  if (_imgCacheDirty) _syncImgCacheToGitHub();
+}
+
 let _isSyncingImgCache = false;
 async function _syncImgCacheToGitHub() {
-  if (_isSyncingImgCache) return false; // 避免同時打兩次
+  if (_isSyncingImgCache) return false;
   _isSyncingImgCache = true;
+  _setSyncStatus('ing');
   const token = getCfg().githubToken;
-  if (!token) { _isSyncingImgCache = false; return false; }
+  if (!token) { _isSyncingImgCache = false; _setSyncStatus('error'); return false; }
   try {
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(_imgCache, null, 2))));
     await _githubPut(token, 'images/index.json', content);
     _imgCacheDirty = false;
+    _setSyncStatus('clean');
     return true;
   } catch (e) {
     console.warn('同步 index.json 失敗', e);
+    _setSyncStatus('error');
     return false;
   } finally {
     _isSyncingImgCache = false;
@@ -1375,6 +1393,10 @@ async function _syncImgCacheToGitHub() {
 }
 
 async function _loadImgCacheFromGitHub() {
+  // 本地有未同步的變動，先同步出去再拉，避免 GitHub 舊資料蓋掉本地修改
+  if (_imgCacheDirty) {
+    await _syncImgCacheToGitHub();
+  }
   try {
     const res = await fetch(
       `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/images/index.json?t=${Date.now()}`
@@ -1435,7 +1457,6 @@ async function clearAnnImg(annDate, annType, lang) {
   }
   _saveImgCache();
   renderList();
-  _syncImgCacheToGitHub();
 }
 
 
@@ -1564,14 +1585,10 @@ function selectImgFromLibrary(url, name) {
   toast(`✅ 已套用到 ${_imgLibLang}`);
 }
 
-async function closeImgLibrary() {
+function closeImgLibrary() {
   document.getElementById('modal-img-library').classList.remove('open');
+  _imgLibDirty = false;
   renderList();
-  if (_imgLibDirty) {
-    _imgLibDirty = false;
-    const synced = await _syncImgCacheToGitHub();
-    if (!synced) toast('⚠️ 圖片已套用，但同步失敗，其他裝置可能看不到');
-  }
 }
 
 
@@ -1599,7 +1616,7 @@ Object.assign(window, {
   markCfgUnsaved, addAnnouncementType, updateTypeName, updateTypeLang, removeLang, addLang, removeType,
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
   openImgLibrary, _imgLibLoadFolder, switchImgLangTab, selectImgFromLibrary, closeImgLibrary,
-  deleteSchedule, clearAnnImg,
+  deleteSchedule, clearAnnImg, syncStatusClick,
 });
 
 })();
