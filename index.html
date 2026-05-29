@@ -29,12 +29,11 @@
     <div id="test-mode-banner" style="display:none;">🧪 測試模式中</div>
     <button class="nav-btn active" onclick="showPage('list', event)">📋 公告列表</button>
     <button class="nav-btn" onclick="showPage('settings', event)">⚙️ 設定</button>
-    <div style="flex:1;"></div>
-    <div id="sync-status" class="sync-status sync-clean" style="display:none;" onclick="syncStatusClick()"></div>
   </nav>
 
   <!-- 主內容 -->
   <main class="main">
+    <div id="sync-status" class="sync-status sync-clean" style="display:none;" onclick="syncStatusClick()"></div>
 
     <!-- ① 公告列表 -->
     <div id="page-list" class="page active">
@@ -1386,23 +1385,17 @@ async function _syncImgCacheToGitHub() {
 }
 
 async function _loadImgCacheFromGitHub() {
-  // 本地有未同步的變動，先同步出去再拉，避免 GitHub 舊資料蓋掉本地修改
-  if (_imgCacheDirty) {
-    await _syncImgCacheToGitHub();
-  }
+  // 本地有未同步的變動，先推送，再拉最新
+  if (_imgCacheDirty) await _syncImgCacheToGitHub();
   try {
     const res = await fetch(
       `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/images/index.json?t=${Date.now()}`
     );
     if (!res.ok) return;
     const json = await res.json();
-    for (const [key, val] of Object.entries(json)) {
-      if (typeof val === 'object' && val !== null) {
-        _imgCache[key] = Object.assign(_imgCache[key] || {}, val);
-      } else {
-        _imgCache[key] = val;
-      }
-    }
+    // 直接以 GitHub 為主覆蓋，不做合併（合併會讓刪除操作失效）
+    Object.keys(_imgCache).forEach(k => delete _imgCache[k]);
+    Object.assign(_imgCache, json);
     localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
     _markImgCacheFetched();
     if (allData.length) renderList();
@@ -1582,8 +1575,11 @@ function closeImgLibrary() {
 
 // ══ MODULE: INIT ═════════════════════════════════════════════════
 
-window.addEventListener('beforeunload', () => {
-  if (_imgCacheDirty) _syncImgCacheToGitHub();
+window.addEventListener('visibilitychange', () => {
+  // 頁面隱藏（切換分頁、關閉）時同步，比 beforeunload 更可靠
+  if (document.visibilityState === 'hidden' && _imgCacheDirty) {
+    _syncImgCacheToGitHub();
+  }
 });
 
 window.addEventListener('DOMContentLoaded', () => {

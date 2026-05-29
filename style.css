@@ -33,9 +33,10 @@ body {
 .nav-btn:hover { background: rgba(255,255,255,0.08); color: white; }
 .nav-btn.active { background: var(--primary); color: white; }
 .sync-status {
-  font-size: 0.78rem; padding: 8px 12px; border-radius: 8px;
+  position: fixed; top: 16px; right: 20px; z-index: 50;
+  font-size: 0.78rem; padding: 6px 12px; border-radius: 20px;
   cursor: pointer; display: flex; align-items: center; gap: 6px;
-  transition: background 0.15s;
+  transition: background 0.15s; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
 .sync-status::before { content: '●'; font-size: 0.7rem; }
 .sync-clean  { background: rgba(16,185,129,0.15); color: #6ee7b7; }
