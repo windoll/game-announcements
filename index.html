@@ -225,6 +225,16 @@
 (function () {
 'use strict';
 
+
+// ══ MODULE: CONSTANTS ════════════════════════════════════════════
+
+const LANGS       = ['TW', 'CN', 'JP', 'EN'];
+const LS_KEY_CFG  = 'ann-cfg';
+const LS_KEY_SCH  = 'ann-schedules';
+const LS_KEY_IMG  = 'ann-img-cache';
+const LS_KEY_IMG_TS = 'ann-img-cache-ts';
+const IMG_ROOT    = 'images';
+
 // ══ MODULE: CONFIG ══════════════════════════════════════════════
 
 const DEFAULTS = {
@@ -247,12 +257,43 @@ const N8N_WEBHOOK_TEST   = 'https://charlie98783.app.n8n.cloud/webhook-test/send
 
 function N8N_WEBHOOK() { return getCfg().testMode ? N8N_WEBHOOK_TEST : N8N_WEBHOOK_PROD; }
 
-function getCfg() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('ann-cfg') || '{}');
-    return Object.assign({}, DEFAULTS, saved);
-  } catch { return { ...DEFAULTS }; }
-}
+function getCfg() { return cfgStore.get(); }
+
+
+// ══ MODULE: STORES ═══════════════════════════════════════════════
+
+const cfgStore = {
+  get() {
+    try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(LS_KEY_CFG) || '{}')); }
+    catch { return { ...DEFAULTS }; }
+  },
+  save(cfg) { localStorage.setItem(LS_KEY_CFG, JSON.stringify(cfg)); },
+};
+
+const scheduleStore = {
+  get()        { try { return JSON.parse(localStorage.getItem(LS_KEY_SCH) || '{}'); } catch { return {}; } },
+  save(data)   { localStorage.setItem(LS_KEY_SCH, JSON.stringify(data)); },
+  saveSchedule(annDate, sendDate, sendTime, typeName) {
+    const all = this.get();
+    if (!all[annDate]) all[annDate] = [];
+    const dup = all[annDate].find(r => r.sendDate === sendDate && r.sendTime === sendTime);
+    if (!dup) all[annDate].push({ sendDate, sendTime, typeName, createdAt: new Date().toISOString() });
+    this.save(all);
+  },
+  deleteEntry(annDate, sendDate, sendTime) {
+    const all = this.get();
+    if (!all[annDate]) return;
+    all[annDate] = all[annDate].filter(r => !(r.sendDate === sendDate && r.sendTime === sendTime));
+    this.save(all);
+  },
+};
+
+const imgCacheStore = {
+  load() {
+    try { return JSON.parse(localStorage.getItem(LS_KEY_IMG) || '{}'); } catch { return {}; }
+  },
+  save(cache) { localStorage.setItem(LS_KEY_IMG, JSON.stringify(cache)); },
+};
 
 // ══ MODULE: UTILS ═══════════════════════════════════════════════
 
@@ -269,11 +310,13 @@ function escUrl(s) {
 
 function stopProp(e) { e.stopPropagation(); }
 
+let _toastTimer = null;
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 3000);
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.classList.remove('show'); _toastTimer = null; }, 3000);
 }
 
 // ══ MODULE: AUTH ════════════════════════════════════════════════
@@ -450,19 +493,27 @@ const borderColor = { today: '#10b981', upcoming: '#f59e0b', past: '#e0e0e0' };
 const statusOrder = { upcoming: 0, today: 1, past: 2 };
 const statusLabel = { today: '📅 今日', upcoming: '⏰ 未來排程', past: '✓ 已過期' };
 
+
+// 純函式：比對維護預告 Sheet 日期與內文日期
+// 回傳 { mismatch: bool, sheetDate: string, contentDate: string }
+function checkMaintDateMismatch(ann) {
+  if (!ann.type || !ann.type.includes('維護預告') || !ann.contentTW) {
+    return { mismatch: false };
+  }
+  const m = ann.contentTW.match(/維護時間[\s\S]*?(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  if (!m) return { mismatch: false };
+  const cM = parseInt(m[2], 10), cD = parseInt(m[3], 10);
+  const parts = String(ann.date || '').replace(/^0*(\d+)\/0*(\d+)$/, '$1/$2').split('/');
+  if (parts.length !== 2) return { mismatch: false };
+  const sM = parseInt(parts[0], 10), sD = parseInt(parts[1], 10);
+  return {
+    mismatch: cM !== sM || cD !== sD,
+    sheetDate: ann.date,
+    contentDate: `${cM}/${cD}`,
+  };
+}
+
 // ══ MODULE: SCHEDULE STORE ═══════════════════════════════════════
-
-function _getSchedules() {
-  try { return JSON.parse(localStorage.getItem('ann-schedules') || '{}'); } catch { return {}; }
-}
-
-function _saveSchedule(annDate, sendDate, sendTime, typeName) {
-  const all = _getSchedules();
-  if (!all[annDate]) all[annDate] = [];
-  const dup = all[annDate].find(r => r.sendDate === sendDate && r.sendTime === sendTime);
-  if (!dup) all[annDate].push({ sendDate, sendTime, typeName, createdAt: new Date().toISOString() });
-  localStorage.setItem('ann-schedules', JSON.stringify(all));
-}
 
 function _getScheduleBadgesHtml(annDate, schedulesAll) {
   const records = schedulesAll[annDate] || [];
@@ -481,137 +532,102 @@ function _getScheduleBadgesHtml(annDate, schedulesAll) {
 
   if (valid.length !== records.length) {
     schedulesAll[annDate] = valid;
-    localStorage.setItem('ann-schedules', JSON.stringify(schedulesAll));
+    scheduleStore.save(schedulesAll);
   }
 
-  return valid.map((r, i) => {
+  return valid.map(r => {
     const label = `✈️ ${escHtml(r.sendDate)} ${escHtml(r.sendTime)}${r.typeName ? ' · ' + escHtml(r.typeName) : ''}`;
-    return `<span class="scheduled-badge">${label}<span class="scheduled-badge-del" onclick="stopProp(event);deleteSchedule('${escHtml(annDate)}',${i})" title="刪除此排程記錄">✕</span></span>`;
+    const safeAnnDate  = escHtml(annDate);
+    const safeSendDate = escHtml(r.sendDate);
+    const safeSendTime = escHtml(r.sendTime);
+    return `<span class="scheduled-badge">${label}<span class="scheduled-badge-del" onclick="stopProp(event);deleteSchedule('${safeAnnDate}','${safeSendDate}','${safeSendTime}')" title="刪除此排程記錄">✕</span></span>`;
   }).join(' ');
 }
 
-function deleteSchedule(annDate, idx) {
-  const all = _getSchedules();
-  if (!all[annDate]) return;
-  all[annDate].splice(idx, 1);
-  localStorage.setItem('ann-schedules', JSON.stringify(all));
+function deleteSchedule(annDate, sendDate, sendTime) {
+  scheduleStore.deleteEntry(annDate, sendDate, sendTime);
   renderList();
 }
 
 // ══ MODULE: RENDER LIST ══════════════════════════════════════════
+// 純函式：過濾 + 排序，不觸碰 DOM
+function _filterAndSort(data, { searchQuery, typeFilter, statusFilter }) {
+  const q  = (searchQuery || '').toLowerCase();
+  const tf = typeFilter   || '';
+  const sf = statusFilter || 'all';
 
-function renderList() {
-  const q  = (document.getElementById('q').value || '').toLowerCase();
-  const tf = document.getElementById('tf').value;
-  const sf = document.getElementById('sf').value;
-
-  const schedulesAll = _getSchedules();
-
-  const withMeta = allData.map(a => {
+  const withStatus = data.map(a => {
     const dt = parseDate(a.date, a.time);
     const st = getStatus(dt);
     return { a, dt, st };
   });
 
-  let list = withMeta.filter(({ a, st }) => {
-    if (q && !(a.titleTW + a.date + a.type).toLowerCase().includes(q)) return false;
+  const filtered = withStatus.filter(({ a, st }) => {
+    if (q  && !(a.titleTW + a.date + a.type).toLowerCase().includes(q)) return false;
     if (tf && !a.type.includes(tf)) return false;
     if (sf !== 'all' && st !== sf) return false;
     return true;
   });
 
-  list.sort((x, y) => {
+  filtered.sort((x, y) => {
     if (statusOrder[x.st] !== statusOrder[y.st]) return statusOrder[x.st] - statusOrder[y.st];
     return (+y.dt || 0) - (+x.dt || 0);
   });
 
-  let todayCnt = 0, futureCnt = 0;
-  withMeta.forEach(({ st }) => {
-    if (st === 'today') todayCnt++;
-    else if (st === 'upcoming') futureCnt++;
-  });
-  document.getElementById('s-total').textContent  = allData.length;
-  document.getElementById('s-today').textContent  = todayCnt;
-  document.getElementById('s-future').textContent = futureCnt;
+  const todayCnt  = withStatus.filter(({ st }) => st === 'today').length;
+  const futureCnt = withStatus.filter(({ st }) => st === 'upcoming').length;
 
-  if (!list.length) {
-    document.getElementById('list-area').innerHTML = '<div class="empty">📭 沒有符合條件的公告</div>';
-    return;
-  }
+  return { filtered, totalCnt: data.length, todayCnt, futureCnt };
+}
 
-  const groups = {};
-  list.forEach(({ a, st }) => {
-    (groups[st] = groups[st] || []).push(a);
-  });
+// 純函式：組單張公告卡片 HTML
+function _buildCardHtml(a, id, st, schedulesAll) {
+  const bc          = borderColor[st];
+  const dateDisplay = a.date + (a.time ? ' ' + a.time : '');
+  const safeType    = escHtml((a.type || '').replace(/'/g, ''));
+  const safeDate    = escHtml(a.date || '');
 
-  let html = '';
-  ['upcoming', 'today', 'past'].forEach(s => {
-    if (!groups[s]?.length) return;
-    html += `<div class="sec-label">${statusLabel[s]}（${groups[s].length}）</div>`;
-    groups[s].forEach((a, i) => {
-      const id = s + '_' + i;
-      const st = s;
-      const bc = borderColor[st];
-      const dateDisplay = a.date + (a.time ? ' ' + a.time : '');
+  const mkCheck = (code, val, imgUrl, annDate, annType) => {
+    const imgHtml = imgUrl
+      ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link" onclick="stopProp(event)">🖼 查看圖片</a><span class="lang-img-clear" data-date="${escHtml(annDate)}" data-type="${escHtml(annType||'')}" data-lang="${code}" onclick="stopProp(event);clearAnnImg(this.dataset.date,this.dataset.type,this.dataset.lang)" title="清除此語系圖片">✕</span>`
+      : '<span class="lang-img-empty">尚無圖片</span>';
+    const ok = val && imgUrl;
+    const checkHtml = ok
+      ? `<span class="lang-check lang-ok">${code} ✓</span>`
+      : `<span class="lang-check lang-no">${code} ✗</span>`;
+    const titleHtml = val
+      ? `<span class="lang-title-text">${escHtml(val)}</span>`
+      : `<span class="lang-title-text lang-empty">未填寫</span>`;
+    return `<div class="lang-row">${checkHtml}${imgHtml}${titleHtml}</div>`;
+  };
 
-      const mkCheck = (code, val, imgUrl, annDate, annType) => {
-        const imgHtml = imgUrl
-          ? `<a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="lang-img-link" onclick="stopProp(event)">🖼 查看圖片</a><span class="lang-img-clear" data-date="${escHtml(annDate)}" data-type="${escHtml(annType||'')}" data-lang="${code}" onclick="stopProp(event);clearAnnImg(this.dataset.date,this.dataset.type,this.dataset.lang)" title="清除此語系圖片">✕</span>`
-          : '<span class="lang-img-empty">尚無圖片</span>';
-        const ok = val && imgUrl;
-        const checkHtml = ok
-          ? `<span class="lang-check lang-ok">${code} ✓</span>`
-          : `<span class="lang-check lang-no">${code} ✗</span>`;
-        const titleHtml = val
-          ? `<span class="lang-title-text">${escHtml(val)}</span>`
-          : `<span class="lang-title-text lang-empty">未填寫</span>`;
-        return `<div class="lang-row">${checkHtml}${imgHtml}${titleHtml}</div>`;
-      };
-      const langTags =
-        '<hr class="lang-divider">' +
-        mkCheck('TW', a.titleTW, escUrl(_getImgUrl(a.date, 'TW', a.type)), a.date, a.type) +
-        mkCheck('CN', a.titleCN, escUrl(_getImgUrl(a.date, 'CN', a.type)), a.date, a.type) +
-        mkCheck('JP', a.titleJP, escUrl(_getImgUrl(a.date, 'JP', a.type)), a.date, a.type) +
-        mkCheck('EN', a.titleEN, escUrl(_getImgUrl(a.date, 'EN', a.type)), a.date, a.type);
+  const langTags =
+    '<hr class="lang-divider">' +
+    mkCheck('TW', a.titleTW, escUrl(_getImgUrl(a.date, 'TW', a.type)), a.date, a.type) +
+    mkCheck('CN', a.titleCN, escUrl(_getImgUrl(a.date, 'CN', a.type)), a.date, a.type) +
+    mkCheck('JP', a.titleJP, escUrl(_getImgUrl(a.date, 'JP', a.type)), a.date, a.type) +
+    mkCheck('EN', a.titleEN, escUrl(_getImgUrl(a.date, 'EN', a.type)), a.date, a.type);
 
-      const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
+  const isDraft = !a.contentTW && !a.contentCN && !a.contentJP && !a.contentEN;
 
-      _annMap.set(id, a);
-      const safeType = escHtml((a.type || '').replace(/'/g, ''));
-      const safeDate = escHtml(a.date || '');
+  const mkContent = (code, val) => val
+    ? `<div class="content-block"><div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span></div><div class="content-text">${escHtml(val)}</div></div>`
+    : `<div class="content-block"><div class="lang-row"><span class="lang-check lang-no">${code} ✗</span></div></div>`;
 
-      const mkContent = (code, val) => val
-        ? `<div class="content-block"><div class="lang-row"><span class="lang-check lang-ok">${code} ✓</span></div><div class="content-text">${escHtml(val)}</div></div>`
-        : `<div class="content-block"><div class="lang-row"><span class="lang-check lang-no">${code} ✗</span></div></div>`;
-      let contentHtml = '';
-      if (!isDraft) {
-        contentHtml =
-          '<div class="ann-content">' +
-          mkContent('TW', a.contentTW) +
-          mkContent('CN', a.contentCN) +
-          mkContent('JP', a.contentJP) +
-          mkContent('EN', a.contentEN) +
-          '</div>';
-      }
+  const contentHtml = isDraft ? '' :
+    '<div class="ann-content">' +
+    mkContent('TW', a.contentTW) + mkContent('CN', a.contentCN) +
+    mkContent('JP', a.contentJP) + mkContent('EN', a.contentEN) +
+    '</div>';
 
-      let cardDateWarn = '';
-      if (a.type && a.type.includes('維護預告') && a.contentTW) {
-        const mMatch = a.contentTW.match(/維護時間[\s\S]*?(\d{4})年(\d{1,2})月(\d{1,2})日/);
-        if (mMatch) {
-          const cM = parseInt(mMatch[2], 10), cD = parseInt(mMatch[3], 10);
-          const sParts = (a.date || '').replace(/^0*(\d+)\/0*(\d+)$/, '$1/$2').split('/');
-          if (sParts.length === 2) {
-            const sM = parseInt(sParts[0], 10), sD = parseInt(sParts[1], 10);
-            if (cM !== sM || cD !== sD) {
-              cardDateWarn = `<div class="card-date-warn">⚠️ <strong>日期不符</strong>：Sheet 日期 <strong>${escHtml(a.date)}</strong>，內文維護時間為 <strong>${cM}/${cD}</strong></div>`;
-            }
-          }
-        }
-      }
+  const _maintCheck  = checkMaintDateMismatch(a);
+  const cardDateWarn = _maintCheck.mismatch
+    ? `<div class="card-date-warn">⚠️ <strong>日期不符</strong>：Sheet 日期 <strong>${escHtml(_maintCheck.sheetDate)}</strong>，內文維護時間為 <strong>${escHtml(_maintCheck.contentDate)}</strong></div>`
+    : '';
 
-      const scheduleBadges = _getScheduleBadgesHtml(a.date, schedulesAll);
+  const scheduleBadges = _getScheduleBadgesHtml(a.date, schedulesAll);
 
-      html += `
+  return `
 <div class="ann-card" id="card-${id}" style="border-left-color:${bc}" onclick="toggleCard('${id}')">
   <div class="ann-top">
     <span class="dot dot-${st}"></span>
@@ -641,6 +657,38 @@ function renderList() {
     </button>` : ''}
   </div>` : ''}
 </div>`;
+}
+
+
+
+function renderList() {
+  const searchQuery  = document.getElementById('q').value;
+  const typeFilter   = document.getElementById('tf').value;
+  const statusFilter = document.getElementById('sf').value;
+
+  const schedulesAll = scheduleStore.get();
+  const { filtered, totalCnt, todayCnt, futureCnt } = _filterAndSort(allData, { searchQuery, typeFilter, statusFilter });
+
+  document.getElementById('s-total').textContent  = totalCnt;
+  document.getElementById('s-today').textContent  = todayCnt;
+  document.getElementById('s-future').textContent = futureCnt;
+
+  if (!filtered.length) {
+    document.getElementById('list-area').innerHTML = '<div class="empty">📭 沒有符合條件的公告</div>';
+    return;
+  }
+
+  const groups = {};
+  filtered.forEach(({ a, st }) => { (groups[st] = groups[st] || []).push(a); });
+
+  let html = '';
+  ['upcoming', 'today', 'past'].forEach(s => {
+    if (!groups[s]?.length) return;
+    html += `<div class="sec-label">${statusLabel[s]}（${groups[s].length}）</div>`;
+    groups[s].forEach((a, i) => {
+      const id = s + '_' + i;
+      _annMap.set(id, a);
+      html += _buildCardHtml(a, id, s, schedulesAll);
     });
   });
 
@@ -746,21 +794,10 @@ function openSendModal(cardId) {
   const warnEl = document.getElementById('modal-date-warn');
   warnEl.style.display = 'none';
   warnEl.textContent   = '';
-  if (annType.includes('維護預告') && ann.contentTW) {
-    const maintMatch = ann.contentTW.match(/維護時間[\s\S]*?(\d{4})年(\d{1,2})月(\d{1,2})日/);
-    if (maintMatch) {
-      const contentMonth = parseInt(maintMatch[2], 10);
-      const contentDay   = parseInt(maintMatch[3], 10);
-      const sheetParts   = (ann.date || '').replace(/^0*(\d+)\/0*(\d+)$/, '$1/$2').split('/');
-      if (sheetParts.length === 2) {
-        const sheetMonth = parseInt(sheetParts[0], 10);
-        const sheetDay   = parseInt(sheetParts[1], 10);
-        if (contentMonth !== sheetMonth || contentDay !== sheetDay) {
-          warnEl.innerHTML = `⚠️ <strong>日期不符</strong>：Sheet 日期為 <strong>${escHtml(ann.date)}</strong>，但內文【維護時間】的日期為 <strong>${contentMonth}/${contentDay}</strong>，請確認是否正確。`;
-          warnEl.style.display = 'block';
-        }
-      }
-    }
+  const _mw = checkMaintDateMismatch(ann);
+  if (_mw.mismatch) {
+    warnEl.innerHTML = `⚠️ <strong>日期不符</strong>：Sheet 日期為 <strong>${escHtml(_mw.sheetDate)}</strong>，但內文【維護時間】的日期為 <strong>${escHtml(_mw.contentDate)}</strong>，請確認是否正確。`;
+    warnEl.style.display = 'block';
   }
 
   document.getElementById('modal-send').classList.add('open');
@@ -858,7 +895,7 @@ async function confirmSend() {
   }
 
   // 排程衝突提示：此公告已有未來排程
-  const existingSchedules = (_getSchedules()[pendingAnn.date] || []);
+  const existingSchedules = (scheduleStore.get()[pendingAnn.date] || []);
   if (existingSchedules.length > 0) {
     const existing = existingSchedules.map(r => `${r.sendDate} ${r.sendTime}`).join('、');
     const confirmed = confirm(`⚠️ 此公告已有排程：${existing}\n\n確定要再新增一個排程嗎？`);
@@ -891,7 +928,7 @@ async function confirmSend() {
 
     if (!res.ok) throw new Error('n8n 回應錯誤：' + res.status);
 
-    _saveSchedule(pendingAnn.date, dateVal, timeVal, typeName);
+    scheduleStore.saveSchedule(pendingAnn.date, dateVal, timeVal, typeName);
     closeModal();
     toast(`✅ 排程已設定！將於 ${dateVal} ${timeVal} 發送`);
     renderList();
@@ -923,7 +960,7 @@ function loadSettings() {
 
 function toggleTestMode(on) {
   const cfg = getCfg();
-  localStorage.setItem('ann-cfg', JSON.stringify(Object.assign({}, cfg, { testMode: on })));
+  cfgStore.save(Object.assign({}, cfg, { testMode: on }));
   applyTestModeUI(on);
   toast(on ? '🧪 測試模式已開啟' : '✅ 已切換回正式模式');
 }
@@ -956,7 +993,7 @@ function applyTestModeUI(on) {
 function saveTypes(types, mode) {
   const cfg = getCfg();
   const key = mode === 'test' ? 'testAnnouncementTypes' : 'announcementTypes';
-  localStorage.setItem('ann-cfg', JSON.stringify(Object.assign({}, cfg, { [key]: types })));
+  cfgStore.save(Object.assign({}, cfg, { [key]: types }));
 }
 
 function getTypes(mode) {
@@ -1096,7 +1133,7 @@ function saveSettings() {
     sheetGid:    document.getElementById('cfg-sheet-gid').value.trim(),
     githubToken: document.getElementById('cfg-github-token').value.trim(),
   });
-  localStorage.setItem('ann-cfg', JSON.stringify(updated));
+  cfgStore.save(updated);
   const pnEl = document.querySelector('.sidebar .project-name');
   if (pnEl) pnEl.textContent = updated.projectName;
   clearCfgUnsaved();
@@ -1120,7 +1157,7 @@ function importSettings(event) {
   reader.onload = e => {
     try {
       const cfg = JSON.parse(e.target.result);
-      localStorage.setItem('ann-cfg', JSON.stringify(cfg));
+      cfgStore.save(cfg);
       loadSettings();
       applyTestModeUI(!!cfg.testMode);
       toast('✅ 設定已匯入');
@@ -1291,15 +1328,46 @@ function textToRtf(text) {
   return `{\\rtf1\\ansi\\ansicpg950\\deff0\n{\\fonttbl{\\f0\\froman\\fcharset136 Times New Roman;}}\n{\\colortbl;}\n\\f0\\fs24\n${rtfLines}\n}`;
 }
 
+
+// ══ MODULE: GITHUB API ═══════════════════════════════════════════
+
+/**
+ * Low-level GitHub Contents API helper.
+ * GET  → returns parsed JSON (or null on 404)
+ * PUT  → uploads content (base64 string), returns raw URL
+ */
+async function _githubRequest(token, path, method = 'GET', body = null) {
+  const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`;
+  const opts = {
+    method,
+    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
+  };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, opts);
+  if (method === 'GET' && res.status === 404) return null;
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || res.status); }
+  return res.json();
+}
+
+async function _githubGetSha(token, path) {
+  try {
+    const data = await _githubRequest(token, path);
+    return data ? data.sha : null;
+  } catch { return null; }
+}
+
 // ══ MODULE: GITHUB IMAGE ═════════════════════════════════════════
 
 const GITHUB_REPO   = 'windoll/game-announcements';
 const GITHUB_BRANCH = 'main';
 
-const _imgCache = JSON.parse(localStorage.getItem('ann-img-cache') || '{}');
+const _imgCache = imgCacheStore.load();
 
 function _saveImgCache() {
-  localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
+  imgCacheStore.save(_imgCache);
 }
 
 // 產生 imgCache key（日期 + 類型，避免同日期不同類型互相覆蓋）
@@ -1324,7 +1392,7 @@ function _setImgUrl(annDate, lang, url, annType) {
     _imgCache[key] = old ? { ALL: old, TW: old, CN: old, JP: old, EN: old } : {};
   }
   if (lang === 'ALL') {
-    ['TW', 'CN', 'JP', 'EN'].forEach(l => { _imgCache[key][l] = url; });
+    LANGS.forEach(l => { _imgCache[key][l] = url; });
     _imgCache[key]['ALL'] = url;
   } else {
     _imgCache[key][lang] = url;
@@ -1344,7 +1412,7 @@ async function _loadImgCacheFromGitHub() {
     const json = JSON.parse(decodeURIComponent(atob(file.content.replace(/\n/g, '')).split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2,'0')).join('')));
     Object.keys(_imgCache).forEach(k => delete _imgCache[k]);
     Object.assign(_imgCache, json);
-    localStorage.setItem('ann-img-cache', JSON.stringify(_imgCache));
+    imgCacheStore.save(_imgCache);
     if (allData.length) renderList();
   } catch (e) {
     console.warn('載入 index.json 失敗', e);
@@ -1365,33 +1433,13 @@ async function uploadImgCache() {
   try {
     const jsonStr = JSON.stringify(_imgCache, null, 2);
     const content = btoa(encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
-    const path = 'images/index.json';
-
-    // 先取得當前 sha
-    let sha = null;
-    try {
-      const check = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
-        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
-      });
-      if (check.ok) sha = (await check.json()).sha;
-    } catch {}
-
+    const path = `${IMG_ROOT}/index.json`;
+    const sha = await _githubGetSha(token, path);
     const body = { message: 'update images/index.json', content, branch: GITHUB_BRANCH };
     if (sha) body.sha = sha;
-
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
-      method: 'PUT',
-      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-
-    if (res.ok) {
-      btn.textContent = '✅ 已上傳';
-      toast('✅ 圖片設定已上傳到 GitHub');
-    } else {
-      const err = await res.json();
-      throw new Error(err.message || res.status);
-    }
+    await _githubRequest(token, path, 'PUT', body);
+    btn.textContent = '✅ 已上傳';
+    toast('✅ 圖片設定已上傳到 GitHub');
   } catch (e) {
     btn.textContent = '❌ 上傳失敗，點此重試';
     btn.disabled = false;
@@ -1409,41 +1457,31 @@ async function uploadImgCache() {
 }
 
 async function _githubPut(token, path, base64) {
-  let sha = null;
-  try {
-    const check = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
-      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
-    });
-    if (check.ok) sha = (await check.json()).sha;
-  } catch {}
-
+  const sha = await _githubGetSha(token, path);
   const body = { message: `Upload ${path}`, content: base64, branch: GITHUB_BRANCH };
   if (sha) body.sha = sha;
-
-  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
-    method: 'PUT',
-    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) { const e = await res.json(); throw new Error(e.message || res.status); }
+  await _githubRequest(token, path, 'PUT', body);
   return `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${path}`;
 }
 
 async function _githubListImages(token, folder) {
-  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${folder}`, {
-    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
-  });
-  if (!res.ok) return [];
-  const items = await res.json();
-  return items.filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name))
-    .map(f => ({ name: f.name, url: `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${folder}/${f.name}` }));
+  try {
+    const items = await _githubRequest(token, folder);
+    if (!items) return [];
+    return items.filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name))
+      .map(f => ({ name: f.name, url: `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${folder}/${f.name}` }));
+  } catch { return []; }
 }
 
 async function clearAnnImg(annDate, annType, lang) {
   const key = _imgCacheKey(annDate, annType);
   if (_imgCache[key] && typeof _imgCache[key] === 'object') {
-    delete _imgCache[key][lang];
-    if (lang === 'ALL') ['TW','CN','JP','EN'].forEach(l => delete _imgCache[key][l]);
+    if (lang === 'ALL') {
+      LANGS.forEach(l => delete _imgCache[key][l]);
+      delete _imgCache[key]['ALL'];
+    } else {
+      delete _imgCache[key][lang];
+    }
   }
   _saveImgCache();
   renderList();
@@ -1452,49 +1490,50 @@ async function clearAnnImg(annDate, annType, lang) {
 
 // ══ MODULE: IMAGE LIBRARY ════════════════════════════════════════
 
-let _imgLibCardId = '', _imgLibAnnDate = '', _imgLibAnnType = '', _imgLibLang = 'TW';
-let _imgLibCurrentFolder = 'images';
+const _imgLibState = {
+  cardId: '', annDate: '', annType: '', lang: 'TW',
+  folder: IMG_ROOT, dirMemory: {},
+};
 let _isLoadingImgLib = false;
-let _imgLibDirMemory = {}; // annDate_annType → 上次瀏覽的資料夾
 
-function _imgLibMemKey() { return `${_imgLibAnnDate}_${_imgLibAnnType}`; }
+function _imgLibMemKey() { return `${_imgLibState.annDate}_${_imgLibState.annType}`; }
 
 function _imgLibRenderLangTabs() {
   const langTabEl = document.getElementById('img-lib-lang-tabs');
   if (!langTabEl) return;
   langTabEl.style.display = 'flex';
-  langTabEl.innerHTML = ['TW','CN','JP','EN'].map(l => {
-    const hasImg = !!_getImgUrl(_imgLibAnnDate, l, _imgLibAnnType);
+  langTabEl.innerHTML = LANGS.map(l => {
+    const hasImg = !!_getImgUrl(_imgLibState.annDate, l, _imgLibState.annType);
     const dot = hasImg ? '<span class="lang-tab-dot lang-tab-dot-on"></span>' : '<span class="lang-tab-dot"></span>';
     return `<button onclick="switchImgLangTab('${l}')" id="img-lib-lang-${l}"
-      class="img-lib-lang-btn${l === _imgLibLang ? ' active' : ''}">${dot}${l}</button>`;
+      class="img-lib-lang-btn${l === _imgLibState.lang ? ' active' : ''}">${dot}${l}</button>`;
   }).join('');
 }
 
 async function openImgLibrary(cardId, annDate, annType, lang) {
-  _imgLibCardId        = cardId;
-  _imgLibAnnDate       = annDate;
-  _imgLibAnnType       = annType;
-  _imgLibLang          = (lang && lang !== 'ALL') ? lang : 'TW';
-  _imgLibCurrentFolder = _imgLibDirMemory[_imgLibMemKey()] || 'images';
+  _imgLibState.cardId        = cardId;
+  _imgLibState.annDate       = annDate;
+  _imgLibState.annType       = annType;
+  _imgLibState.lang          = (lang && lang !== 'ALL') ? lang : 'TW';
+  _imgLibState.folder = _imgLibState.dirMemory[_imgLibMemKey()] || IMG_ROOT;
 
   document.getElementById('modal-img-library').classList.add('open');
   _imgLibRenderLangTabs();
-  await _imgLibLoadFolder(_imgLibCurrentFolder);
+  await _imgLibLoadFolder(_imgLibState.folder);
 }
 
 function switchImgLangTab(lang) {
-  _imgLibLang = lang;
+  _imgLibState.lang = lang;
   _imgLibRenderLangTabs();
   if (_isLoadingImgLib) return;
-  _imgLibLoadFolder(_imgLibCurrentFolder);
+  _imgLibLoadFolder(_imgLibState.folder);
 }
 
 async function _imgLibLoadFolder(folder) {
   if (_isLoadingImgLib) return;
   _isLoadingImgLib     = true;
-  _imgLibCurrentFolder = folder;
-  _imgLibDirMemory[_imgLibMemKey()] = folder;
+  _imgLibState.folder = folder;
+  _imgLibState.dirMemory[_imgLibMemKey()] = folder;
 
   const grid    = document.getElementById('img-lib-grid');
   const empty   = document.getElementById('img-lib-empty');
@@ -1509,11 +1548,8 @@ async function _imgLibLoadFolder(folder) {
   if (!token) { loading.textContent = '請先在設定頁填入 GitHub Token'; _isLoadingImgLib = false; return; }
 
   try {
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${folder}`, {
-      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
-    });
-    if (!res.ok) { loading.textContent = '載入失敗'; _isLoadingImgLib = false; return; }
-    const items = await res.json();
+    const items = await _githubRequest(token, folder);
+    if (!items) { loading.textContent = '載入失敗：找不到資料夾'; _isLoadingImgLib = false; return; }
 
     const dirs = items.filter(i => i.type === 'dir');
     const imgs = items.filter(i => i.type === 'file' && /\.(png|jpg|jpeg|gif|webp)$/i.test(i.name));
@@ -1522,9 +1558,9 @@ async function _imgLibLoadFolder(folder) {
 
     if (!dirs.length && !imgs.length) { empty.style.display = 'block'; _isLoadingImgLib = false; return; }
 
-    const currentImg = _getImgUrl(_imgLibAnnDate, _imgLibLang, _imgLibAnnType);
+    const currentImg = _getImgUrl(_imgLibState.annDate, _imgLibState.lang, _imgLibState.annType);
 
-    const backHtml = folder !== 'images'
+    const backHtml = folder !== IMG_ROOT
       ? `<div class="img-lib-back" onclick="_imgLibLoadFolder('${folder.split('/').slice(0,-1).join('/')}')">← 返回上層</div>`
       : '';
     const dirHtml = dirs.length
@@ -1554,6 +1590,8 @@ async function _imgLibLoadFolder(folder) {
       });
     }
   } catch(e) {
+    console.warn('圖片庫載入失敗', e);
+    toast('⚠️ 圖片庫載入失敗：' + e.message);
     loading.style.display = 'block';
     loading.textContent = '載入失敗：' + e.message;
   } finally {
@@ -1562,12 +1600,12 @@ async function _imgLibLoadFolder(folder) {
 }
 
 function selectImgFromLibrary(e, url) {
-  _setImgUrl(_imgLibAnnDate, _imgLibLang, url, _imgLibAnnType);
+  _setImgUrl(_imgLibState.annDate, _imgLibState.lang, url, _imgLibState.annType);
   _saveImgCache();
   document.querySelectorAll('.img-lib-thumb').forEach(el => el.classList.remove('selected'));
   e.currentTarget.classList.add('selected');
   _imgLibRenderLangTabs();
-  toast(`✅ 已套用到 ${_imgLibLang}`);
+  toast(`✅ 已套用到 ${_imgLibState.lang}`);
 }
 
 function closeImgLibrary() {
@@ -1604,3 +1642,4 @@ Object.assign(window, {
 </script>
 </body>
 </html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
