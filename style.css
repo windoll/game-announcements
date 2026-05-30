@@ -500,8 +500,17 @@ body {
   font-size: 0.85rem; color: #374151; transition: background 0.15s;
 }
 .imgmgr-dir-item:hover { background: #ede9fe; border-color: #6366f1; color: #6366f1; }
-.imgmgr-dir-icon { font-size: 1rem; }
-.imgmgr-dir-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imgmgr-dir-item:hover .imgmgr-dir-actions { opacity: 1; }
+.imgmgr-dir-icon { font-size: 1rem; cursor: pointer; }
+.imgmgr-dir-name { flex: 1; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.imgmgr-dir-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; margin-left: auto; }
+.imgmgr-dir-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.8rem; padding: 2px 4px; border-radius: 4px;
+  line-height: 1; opacity: 0.6;
+}
+.imgmgr-dir-btn:hover { opacity: 1; background: rgba(0,0,0,0.06); }
+.imgmgr-dir-btn-del:hover { background: #fef2f2; }
 
 /* 圖片 grid */
 .imgmgr-img-grid {
