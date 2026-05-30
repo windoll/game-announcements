@@ -449,3 +449,92 @@ body {
   font-size: 0.72rem; font-weight: 700; color: #6b7280;
   width: 24px; flex-shrink: 0;
 }
+
+/* ── 圖片管理頁 ── */
+.imgmgr-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.imgmgr-toolbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 麵包屑 */
+.imgmgr-breadcrumb {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 0.85rem; font-weight: 600; flex-wrap: wrap;
+}
+.imgmgr-crumb {
+  cursor: pointer; color: var(--primary); padding: 2px 4px; border-radius: 4px;
+}
+.imgmgr-crumb:hover { background: #ede9fe; }
+.imgmgr-crumb-cur { color: var(--text); cursor: default; }
+.imgmgr-crumb-cur:hover { background: none; }
+.imgmgr-crumb-sep { color: #bbb; font-size: 0.9rem; }
+
+/* 上傳預覽 */
+.imgmgr-upload-preview {
+  display: flex; gap: 16px; align-items: flex-start;
+  background: #f9fafb; border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px; margin-bottom: 16px;
+}
+.imgmgr-upload-preview img {
+  width: 80px; height: 80px; object-fit: cover;
+  border-radius: 8px; flex-shrink: 0; border: 1px solid var(--border);
+}
+.imgmgr-upload-info { flex: 1; min-width: 0; }
+.imgmgr-upload-status {
+  font-size: 0.8rem; color: var(--text-sub); margin-top: 8px; min-height: 18px;
+}
+
+/* section 標題 */
+.imgmgr-section-label {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+  color: #bbb; margin: 16px 0 8px; text-transform: uppercase;
+}
+
+/* 資料夾列 */
+.imgmgr-dir-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.imgmgr-dir-item {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  background: #f3f4f6; border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 14px;
+  font-size: 0.85rem; color: #374151; transition: background 0.15s;
+}
+.imgmgr-dir-item:hover { background: #ede9fe; border-color: #6366f1; color: #6366f1; }
+.imgmgr-dir-icon { font-size: 1rem; }
+.imgmgr-dir-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 圖片 grid */
+.imgmgr-img-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.imgmgr-img-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+.imgmgr-img-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+.imgmgr-img-wrap { position: relative; }
+.imgmgr-img-wrap img {
+  width: 100%; height: 110px; object-fit: cover;
+  display: block; cursor: pointer;
+}
+.imgmgr-used-badge {
+  position: absolute; top: 5px; left: 5px;
+  background: rgba(99,102,241,0.85); color: white;
+  font-size: 0.65rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 10px; cursor: default;
+}
+.imgmgr-img-name {
+  font-size: 0.72rem; color: #555; padding: 5px 8px 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.imgmgr-img-actions {
+  padding: 4px 8px 8px;
+}
+.imgmgr-del-btn {
+  width: 100%; font-size: 0.72rem; padding: 4px 8px;
+  color: #ef4444; border-color: #fca5a5;
+}
+.imgmgr-del-btn:hover { background: #fef2f2; opacity: 1; }
