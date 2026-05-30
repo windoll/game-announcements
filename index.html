@@ -181,7 +181,7 @@
     <div id="img-lib-empty" class="img-lib-empty" style="display:none;">此資料夾沒有圖片</div>
     <div id="img-lib-loading" class="img-lib-loading">載入中…</div>
     <div class="modal-footer modal-footer-sm">
-      <button class="btn btn-outline" onclick="closeImgLibrary()">完成</button>
+      <button class="btn btn-outline" id="btn-img-close" onclick="closeImgLibrary()">取消</button>
       <button class="btn btn-primary" id="btn-img-upload" onclick="uploadImgCache()">⬆ 上傳到 GitHub</button>
     </div>
   </div>
@@ -1440,19 +1440,19 @@ async function uploadImgCache() {
     await _githubRequest(token, path, 'PUT', body);
     btn.textContent = '✅ 已上傳';
     toast('✅ 圖片設定已上傳到 GitHub');
+    // 上傳成功：「取消」改成「完成」，讓使用者明確關閉
+    const closeBtn = document.getElementById('btn-img-close');
+    if (closeBtn) {
+      closeBtn.textContent = '✅ 完成';
+      closeBtn.classList.remove('btn-outline');
+      closeBtn.classList.add('btn-green');
+    }
   } catch (e) {
     btn.textContent = '❌ 上傳失敗，點此重試';
     btn.disabled = false;
     toast('❌ 上傳失敗：' + e.message);
   } finally {
     _isUploadingImgCache = false;
-    // 3 秒後恢復按鈕
-    setTimeout(() => {
-      if (btn.textContent !== '❌ 上傳失敗，點此重試') {
-        btn.textContent = '⬆ 上傳到 GitHub';
-        btn.disabled = false;
-      }
-    }, 3000);
   }
 }
 
@@ -1610,6 +1610,18 @@ function selectImgFromLibrary(e, url) {
 
 function closeImgLibrary() {
   document.getElementById('modal-img-library').classList.remove('open');
+  // reset 上傳後的「完成」按鈕狀態，下次開啟時回到「取消」
+  const closeBtn = document.getElementById('btn-img-close');
+  if (closeBtn) {
+    closeBtn.textContent = '取消';
+    closeBtn.classList.remove('btn-green');
+    closeBtn.classList.add('btn-outline');
+  }
+  const uploadBtn = document.getElementById('btn-img-upload');
+  if (uploadBtn) {
+    uploadBtn.textContent = '⬆ 上傳到 GitHub';
+    uploadBtn.disabled = false;
+  }
   renderList();
 }
 
