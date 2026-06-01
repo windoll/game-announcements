@@ -458,10 +458,20 @@ body {
 .imgmgr-toolbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* 麵包屑 */
+.imgmgr-breadcrumb-wrap {
+  display: flex; align-items: center; gap: 6px;
+}
 .imgmgr-breadcrumb {
   display: flex; align-items: center; gap: 4px;
   font-size: 0.85rem; font-weight: 600; flex-wrap: wrap;
 }
+.imgmgr-refresh-btn {
+  background: none; border: none; cursor: pointer;
+  color: #9ca3af; font-size: 0.9rem; padding: 2px 4px;
+  border-radius: 4px; line-height: 1; opacity: 0.6;
+  transition: opacity 0.15s, color 0.15s;
+}
+.imgmgr-refresh-btn:hover { opacity: 1; color: var(--primary); }
 .imgmgr-crumb {
   cursor: pointer; color: var(--primary); padding: 2px 4px; border-radius: 4px;
 }

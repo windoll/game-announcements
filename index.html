@@ -79,11 +79,13 @@
       <div class="page-sub">管理 GitHub 上的圖片資產，可上傳、刪除，並以資料夾分類</div>
 
       <div class="imgmgr-toolbar">
-        <div class="imgmgr-breadcrumb" id="imgmgr-breadcrumb"></div>
+        <div class="imgmgr-breadcrumb-wrap">
+          <div class="imgmgr-breadcrumb" id="imgmgr-breadcrumb"></div>
+          <button class="imgmgr-refresh-btn" onclick="imgMgrRefresh()" title="從 GitHub 重新讀取">↻</button>
+        </div>
         <div class="imgmgr-toolbar-actions">
           <button class="btn btn-primary btn-sm" onclick="imgMgrOpenUpload()">⬆ 上傳圖片</button>
           <button class="btn btn-outline btn-sm" onclick="imgMgrNewFolder()">📁 新增資料夾</button>
-          <button class="btn btn-outline btn-sm" onclick="imgMgrRefresh()">↻ 重新整理</button>
         </div>
       </div>
 
@@ -255,7 +257,7 @@
     <div id="img-lib-loading" class="img-lib-loading">載入中…</div>
     <div class="modal-footer modal-footer-sm">
       <button class="btn btn-outline" id="btn-img-close" onclick="closeImgLibrary()">取消</button>
-      <button class="btn btn-primary" id="btn-img-upload" onclick="uploadImgCache()">⬆ 上傳到 GitHub</button>
+      <button class="btn btn-primary" id="btn-img-upload" onclick="uploadImgCache()">☁ 同步圖片設定</button>
     </div>
   </div>
 </div>
@@ -1501,7 +1503,7 @@ async function uploadImgCache() {
 
   const btn = document.getElementById('btn-img-upload');
   btn.disabled = true;
-  btn.textContent = '⬆ 上傳中…';
+  btn.textContent = '☁ 同步中…';
   _isUploadingImgCache = true;
 
   try {
@@ -1513,7 +1515,7 @@ async function uploadImgCache() {
     if (sha) body.sha = sha;
     await _githubRequest(token, path, 'PUT', body);
     btn.textContent = '✅ 已上傳';
-    toast('✅ 圖片設定已上傳到 GitHub');
+    toast('✅ 圖片設定已同步到 GitHub');
     // 上傳成功：「取消」改成「完成」，讓使用者明確關閉
     const closeBtn = document.getElementById('btn-img-close');
     if (closeBtn) {
@@ -1702,7 +1704,7 @@ function closeImgLibrary() {
   }
   const uploadBtn = document.getElementById('btn-img-upload');
   if (uploadBtn) {
-    uploadBtn.textContent = '⬆ 上傳到 GitHub';
+    uploadBtn.textContent = '☁ 同步圖片設定';
     uploadBtn.disabled = false;
   }
   renderList();
