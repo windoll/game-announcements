@@ -1582,9 +1582,7 @@ async function _doGenerateErolabs(ann, maint) {
       const imgRes = await fetch(imageUrl);
       if (!imgRes.ok) throw new Error('fetch failed');
       const imgBlob = await imgRes.blob();
-      const ext = imageUrl.split('?')[0].split('.').pop().toLowerCase() || 'jpg';
-      const allSame = langs.every(l => _getImgUrl(ann.date, l.code, ann.type) === imageUrl);
-      const fname = (addedUrls.size === 1 && allSame) ? `活動圖片.${ext}` : `活動圖片_${lang.code}.${ext}`;
+      const fname = imageUrl.split('?')[0].split('/').pop() || 'image.jpg';
       zip.file(fname, imgBlob);
     } catch {
       zip.file(`活動圖片連結_${lang.code}.txt`, imageUrl);
@@ -2691,7 +2689,7 @@ Object.assign(window, {
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
   openImgLibrary, _imgLibLoadFolder, switchImgLangTab, selectImgFromLibrary, closeImgLibrary,
   deleteSchedule, clearAnnImg,
-  imgMgrRefresh, imgMgrOpenUpload, imgMgrCloseUpload,
+  imgMgrLoad, imgMgrRefresh, imgMgrOpenUpload, imgMgrCloseUpload,
   imgMgrModalDragOver, imgMgrModalDragLeave, imgMgrModalDrop, imgMgrModalOnFileSelect, imgMgrModalUpload,
   imgMgrOnDragOver, imgMgrOnDragLeave, imgMgrOnDrop,
   imgMgrDeleteImg, imgMgrDeleteImgConfirm,
