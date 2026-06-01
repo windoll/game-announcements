@@ -618,3 +618,19 @@ body {
 
 /* ── 資料夾 inline 新建 ── */
 .imgmgr-dir-new { border-color: #6366f1; background: #f5f3ff; }
+
+/* ── 公告列表頁籤 ── */
+.list-tabs {
+  display: flex; align-items: center; gap: 4px;
+  margin-bottom: 16px; border-bottom: 2px solid var(--border);
+  padding-bottom: 0;
+}
+.list-tab {
+  background: none; border: none; cursor: pointer;
+  padding: 8px 16px; font-size: 0.88rem; font-weight: 600;
+  color: var(--text-sub); border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: color 0.15s, border-color 0.15s;
+}
+.list-tab:hover { color: var(--text); }
+.list-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.list-tab-spacer { flex: 1; }
