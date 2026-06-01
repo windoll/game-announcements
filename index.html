@@ -2592,11 +2592,26 @@ function gauthSignOut() {
 // lang: 'TW' | 'CN' | 'JP' | 'EN' | 'ALL'
 // url: 圖片 URL
 
+async function _resolveSheetName(accessToken, sheetId, sheetGid) {
+  if (_sheetColMap.sheetName) return _sheetColMap.sheetName;
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) throw new Error('無法取得工作表名稱');
+  const data = await res.json();
+  const sheet = data.sheets.find(s => String(s.properties.sheetId) === String(sheetGid));
+  if (!sheet) throw new Error(`找不到 gid=${sheetGid} 的工作表`);
+  _sheetColMap.sheetName = sheet.properties.title;
+  return _sheetColMap.sheetName;
+}
+
 async function sheetsWriteImgUrl(rowIndex, lang, url) {
   const cfg = getCfg();
   if (!cfg.sheetId) throw new Error('請先在設定頁填入 Sheet ID');
 
   const accessToken = await gauthGetAccessToken();
+  const sheetName   = await _resolveSheetName(accessToken, cfg.sheetId, cfg.sheetGid);
 
   // 欄位字母從 _sheetColMap 動態取得
   const langCol = { TW: _sheetColMap.imgTW, CN: _sheetColMap.imgCN, JP: _sheetColMap.imgJP, EN: _sheetColMap.imgEN };
@@ -2606,7 +2621,7 @@ async function sheetsWriteImgUrl(rowIndex, lang, url) {
     : [{ lang, col: langCol[lang] }];
 
   const data = targets.map(({ col }) => ({
-    range:  `${col}${rowIndex + 1}`, // +1 for header row
+    range:  `'${sheetName}'!${col}${rowIndex + 1}`, // +1 for header row
     values: [[url]],
   }));
 
