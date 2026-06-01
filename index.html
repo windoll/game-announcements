@@ -292,7 +292,6 @@
     <div id="img-lib-loading" class="img-lib-loading">載入中…</div>
     <div class="modal-footer modal-footer-sm">
       <button class="btn btn-outline" id="btn-img-close" onclick="closeImgLibrary()">取消</button>
-      <button class="btn btn-primary" id="btn-img-upload" onclick="uploadImgCache()">☁ 同步圖片設定</button>
     </div>
   </div>
 </div>
@@ -582,7 +581,6 @@ async function loadSheet() {
     pastData    = [];
     _pastLoaded = false;
     renderList();
-    _loadImgCacheFromGitHub();
   } catch (e) {
     document.getElementById('list-area').innerHTML =
       `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;color:#991b1b;font-size:0.85rem;">
@@ -1667,62 +1665,6 @@ function _setImgUrl(annDate, lang, url, annType) {
   }
 }
 
-async function _loadImgCacheFromGitHub() {
-  const token = getCfg().githubToken;
-  if (!token) return;
-  try {
-    const res = await fetch(
-      `https://api.github.com/repos/${GITHUB_REPO}/contents/images/index.json`,
-      { headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' } }
-    );
-    if (!res.ok) return;
-    const file = await res.json();
-    const json = JSON.parse(decodeURIComponent(atob(file.content.replace(/\n/g, '')).split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2,'0')).join('')));
-    Object.keys(_imgCache).forEach(k => delete _imgCache[k]);
-    Object.assign(_imgCache, json);
-    imgCacheStore.save(_imgCache);
-    if (allData.length) renderList();
-  } catch (e) {
-    console.warn('載入 index.json 失敗', e);
-  }
-}
-
-let _isUploadingImgCache = false;
-async function uploadImgCache() {
-  if (_isUploadingImgCache) return;
-  const token = getCfg().githubToken;
-  if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
-
-  const btn = document.getElementById('btn-img-upload');
-  btn.disabled = true;
-  btn.textContent = '☁ 同步中…';
-  _isUploadingImgCache = true;
-
-  try {
-    const jsonStr = JSON.stringify(_imgCache, null, 2);
-    const content = btoa(encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
-    const path = `${IMG_ROOT}/index.json`;
-    const sha = await _githubGetSha(token, path);
-    const body = { message: 'update images/index.json', content, branch: GITHUB_BRANCH };
-    if (sha) body.sha = sha;
-    await _githubRequest(token, path, 'PUT', body);
-    btn.textContent = '✅ 已上傳';
-    toast('✅ 圖片設定已同步到 GitHub');
-    // 上傳成功：「取消」改成「完成」，讓使用者明確關閉
-    const closeBtn = document.getElementById('btn-img-close');
-    if (closeBtn) {
-      closeBtn.textContent = '✅ 完成';
-      closeBtn.classList.remove('btn-outline');
-      closeBtn.classList.add('btn-green');
-    }
-  } catch (e) {
-    btn.textContent = '❌ 上傳失敗，點此重試';
-    btn.disabled = false;
-    toast('❌ 上傳失敗：' + e.message);
-  } finally {
-    _isUploadingImgCache = false;
-  }
-}
 
 async function _githubPut(token, path, base64) {
   const sha = await _githubGetSha(token, path);
@@ -1923,11 +1865,6 @@ function closeImgLibrary() {
     closeBtn.textContent = '取消';
     closeBtn.classList.remove('btn-green');
     closeBtn.classList.add('btn-outline');
-  }
-  const uploadBtn = document.getElementById('btn-img-upload');
-  if (uploadBtn) {
-    uploadBtn.textContent = '☁ 同步圖片設定';
-    uploadBtn.disabled = false;
   }
   renderList();
 }
