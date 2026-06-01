@@ -595,7 +595,6 @@ async function _resolveSheetColMap(sheetId, sheetGid) {
     if (json.table) {
       _parseSheetRows(json.table); // 副作用：更新 _sheetColMap
       _colMapResolved = true;
-      console.log('[colMap]', JSON.stringify(_sheetColMap));
     }
   } catch(e) {
     console.warn('_resolveSheetColMap 失敗，使用預設欄位字母', e);
@@ -2682,7 +2681,6 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 Object.assign(window, {
-  get _debugAllData() { return allData; },
   stopProp, checkPassword, showPage, loadSheet, renderList, toggleCard,
   gauthStart, gauthInputCode, gauthSignOut,
   switchListTab, reloadCurrentTab, renderPastList,
