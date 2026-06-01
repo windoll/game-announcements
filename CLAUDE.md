@@ -4,7 +4,7 @@
 
 | 檔案 | 說明 | 行數 |
 |------|------|------|
-| `index.html` | HTML 結構 + JS 邏輯 | ~1808 行 |
+| `index.html` | HTML 結構 + JS 邏輯 | ~2713 行 |
 | `style.css` | 所有 CSS 樣式 | ~420 行 |
 | `deploy.bat` | 部署腳本（git add -A → commit → pull → push） | - |
 
@@ -12,38 +12,42 @@
 
 ## index.html 結構索引
 
-### HTML 區塊（行 1–247）
+### HTML 區塊（行 1–332）
 
 | 行號 | 內容 |
 |------|------|
 | 1–10 | `<head>`、`<link rel="stylesheet" href="style.css">` |
 | 11–22 | 密碼鎖畫面 `#lock-screen` |
-| 24–145 | 主應用 `#main-app`（側邊欄 + 公告列表頁 + 設定頁） |
+| 24–145 | 主應用 `#main-app`（側邊欄 + 公告列表頁 + 圖片管理頁 + 設定頁） |
 | 147–175 | Erolabs 公告彈窗 `#modal-erolabs` |
-| 176–213 | 圖片庫 Modal `#modal-img-library` |
-| 214–246 | 發送確認彈窗 `#modal-send` |
-| 247 | `<script src="jszip">` |
+| 176–215 | 圖片庫 Modal `#modal-img-library` |
+| 216–248 | 發送確認彈窗 `#modal-send` |
+| 332 | `<script src="jszip">` |
 
-### JS 模組（行 248–1797）
+### JS 模組
 
 | 行號範圍 | 模組 | 主要內容 |
 |----------|------|---------|
-| 252–280 | **CONFIG** | `DEFAULTS`、`PAGE_PASSWORD_HASH`、`SECRET_TOKEN`、`N8N_WEBHOOK`、`getCfg()` |
-| 281–302 | **UTILS** | `escHtml()`、`escUrl()`、`stopProp()`、`toast()` |
-| 303–330 | **AUTH** | `checkPassword()`、`initApp()` |
-| 331–340 | **STATE** | `allData`、`pendingAnn`、`_annMap`、`_modalAnn`、`_modalMessages` |
-| 341–350 | **NAV** | `showPage()` |
-| 351–439 | **SHEET** | `loadSheet()`、Google Sheets gviz 解析 |
-| 440–478 | **DATE UTILS** | `parseDate()`（含跨年修正）、`getStatus()`、`badgeClass()` |
-| 479–526 | **SCHEDULE STORE** | `_getSchedules()`、`_saveSchedule()`、`_getScheduleBadgesHtml()`、`deleteSchedule()` |
-| 527–701 | **RENDER LIST** | `renderList()`、`toggleCard()` |
-| 702–952 | **SEND MODAL** | `openSendModal()`、`renderModalLangs()`、`closeModal()`、`confirmSend()` |
-| 953–1180 | **SETTINGS** | `loadSettings()`、`toggleTestMode()`、`applyTestModeUI()`、`saveSettings()`、設定頁類型管理 |
-| 1181–1340 | **EROLABS** | `buildErolabsDocs()`、`_doGenerateErolabs()`、`trimMaintContent()`、`textToRtf()` |
-| 1341–1505 | **GITHUB IMAGE** | `_imgCache`、`_getImgUrl()`、`_setImgUrl()`、`_saveImgCache()`、`_syncImgCacheToGitHub()`、`_loadImgCacheFromGitHub()`、`_githubPut()`、`_githubListImages()`、`uploadImageToGitHub()` |
-| 1506–1769 | **IMAGE LIBRARY** | `openImgLibrary()`、`switchImgLangTab()`、`switchImgLibTab()`、`selectImgFromLibrary()`、`applySelectedImg()`、`previewUploadFile()`、`confirmUploadImg()`、`closeImgLibrary()` |
-| 1770–1780 | **IMG CACHE SYNC** | `syncImgCache()` |
-| 1781–1797 | **INIT** | `DOMContentLoaded`、`Object.assign(window, {...})` 全域暴露 |
+| 345–351 | **CONSTANTS** | `LANGS`、`LS_KEY_CFG`、`LS_KEY_SCH`、`IMG_ROOT` |
+| 352–386 | **CONFIG** | `DEFAULTS`、`PAGE_PASSWORD_HASH`、`SECRET_TOKEN`、`N8N_WEBHOOK()`、`GITHUB_REPO()`、`GITHUB_BRANCH()`、`getCfg()` |
+| 387–414 | **STORES** | `cfgStore`、`scheduleStore` |
+| 415–438 | **UTILS** | `escHtml()`、`escUrl()`、`stopProp()`、`toast()` |
+| 439–465 | **AUTH** | `checkPassword()`、`initApp()` |
+| 466–478 | **STATE** | `allData`、`pastData`、`_activeTab`、`_pastLoaded`、`pendingAnn`、`_annMap`、`_modalAnn`、`_modalMessages` |
+| 479–489 | **NAV** | `showPage()` |
+| 490–743 | **SHEET** | `_sheetColMap`、`_parseSheetRows()`、`_resolveSheetColMap()`、`loadSheet()`、`loadPastSheet()` |
+| 744–802 | **DATE UTILS** | `parseDate()`（含跨年修正）、`getStatus()`、`badgeClass()` |
+| 803–838 | **SCHEDULE STORE** | `_getScheduleBadgesHtml()`、`deleteSchedule()` |
+| 839–990 | **RENDER LIST** | `_filterAndSort()`、`_buildCardHtml()`、`renderList()`、`toggleCard()` |
+| 991–1230 | **SEND MODAL** | `openSendModal()`、`renderModalLangs()`、`closeModal()`、`confirmSend()` |
+| 1231–1478 | **SETTINGS** | `loadSettings()`、`toggleTestMode()`、`applyTestModeUI()`、`saveSettings()`、設定頁類型管理 |
+| 1479–1639 | **EROLABS** | `buildErolabsDocs()`、`_doGenerateErolabs()`、`trimMaintContent()`、`textToRtf()` |
+| 1640–1669 | **GITHUB API** | `_githubRequest()`、`_githubGetSha()` |
+| 1670–1721 | **GITHUB IMAGE** | `_getImgUrl()`、`_githubPut()`、`_githubListImages()`、`clearAnnImg()` |
+| 1722–1893 | **IMAGE LIBRARY** | `openImgLibrary()`、`_imgLibLoadFolder()`、`switchImgLangTab()`、`selectImgFromLibrary()`、`closeImgLibrary()` |
+| 1894–2479 | **IMAGE MANAGER** | `imgMgrLoad()`、`imgMgrGoTo()`、上傳、刪除、重新命名資料夾等 |
+| 2480–2676 | **GOOGLE OAUTH** | `gauthStart()`、`gauthGetAccessToken()`、`_resolveSheetName()`、`sheetsWriteImgUrl()` |
+| 2677–2713 | **INIT** | `DOMContentLoaded`、`Object.assign(window, {...})` 全域暴露（行 2691） |
 
 ---
 
@@ -57,7 +61,6 @@
 | 卡片系統 | `.card`、`.stats`、`.stat` |
 | 篩選列 | `.filters` |
 | 公告卡片 | `.ann-card`、`.ann-top`、`.badge`、`.dot`、`.expand-arrow`、`.ann-content` |
-| 公告卡片圖片列 | `.ann-img-row`、`.ann-img-multi`、`.ann-img-lang-row`、`.ann-img-lang-code` |
 | 語系標籤 | `.lang-row`、`.lang-check`、`.lang-ok`、`.lang-no`、`.lang-img-row` |
 | 按鈕 | `.btn`、`.btn-primary`、`.btn-green`、`.btn-outline`、`.btn-sm`、`.btn-past-send` |
 | Toast | `#toast` |
@@ -66,6 +69,7 @@
 | 密碼鎖 | `#lock-screen`、`.lock-box` |
 | 排程標籤 | `.scheduled-badge`、`.scheduled-badge-del` |
 | 圖片庫 | `.img-lib-tabs`、`.img-lib-lang-tabs`、`.img-lib-lang-btn`、`.img-lib-grid`、`.img-lib-thumb`、`.img-lib-upload-*` |
+| 圖片管理 | `.imgmgr-*` |
 | Erolabs | `.erolabs-opt-*` |
 | 其他 | `.card-date-warn`、`.schedule-badges`、`#test-mode-banner` |
 
@@ -73,18 +77,27 @@
 
 ## 重要資料結構
 
-### `_imgCache`
+### `ann` 物件（allData / pastData 元素）
 ```js
-// 新格式（多語系）
-{ '6/3': { ALL: url, TW: url, CN: url, JP: url, EN: url } }
-// 舊格式（相容）
-{ '6/3': url }
-// 讀取用 _getImgUrl(annDate, lang)
-// 寫入用 _setImgUrl(annDate, lang, url)
+{
+  _rowIndex,           // Sheet 實際列號（從 A 欄「列號」欄讀取）
+  date, time, type,
+  titleTW, contentTW,
+  titleCN, contentCN,
+  titleJP, contentJP,
+  titleEN, contentEN,
+  imgTW, imgCN, imgJP, imgEN,  // 圖片 URL，直接來自 Sheet，唯一來源
+}
 ```
 
-### `_imgLibLang`
-圖片庫目前選中的語系（`'ALL'`、`'TW'`、`'CN'`、`'JP'`、`'EN'`）
+### `_sheetColMap`
+```js
+{
+  dateLetter,   // 「日期」欄的欄位字母（e.g. 'G'）
+  imgTW, imgCN, imgJP, imgEN,  // 各圖片欄的欄位字母
+  sheetName,    // 工作表名稱（首次寫入時從 Sheets API 查詢並快取）
+}
+```
 
 ### `_annMap`
 ```js
@@ -96,19 +109,36 @@ Map<cardId, 公告物件>  // renderList 時存入，供 onclick 查詢
 { '6/3': [{ sendDate, sendTime, typeName, createdAt }] }
 ```
 
-### `ann-img-cache`（localStorage）
-`_imgCache` 的持久化存儲
+---
 
-### `ann-img-cache-ts`（localStorage）
-圖片快取時間戳，當天有效
+## 設定頁欄位 → cfg 對應
+
+| 設定頁欄位 | cfg key |
+|-----------|---------|
+| Google Sheet 網址 | 自動拆解為 `sheetId`、`sheetGid` |
+| GitHub Repo | `githubRepo` |
+| GitHub Branch | `githubBranch`（預設 `main`） |
+| GitHub Token | `githubToken` |
+| N8N Webhook URL | `n8nWebhookProd`（測試模式自動替換 `/webhook/` → `/webhook-test/`） |
+| OAuth Client ID | `oauthClientId` |
+| OAuth Client Secret | `oauthClientSecret` |
+
+---
+
+## 圖片流程
+
+- **來源**：Sheet H~K 欄（TW/CN/JP/EN 圖片 URL）
+- **讀取**：`_getImgUrl(annDate, lang, annType)` → 從 `allData`/`pastData` 找 ann，直接讀 `imgXX` 欄
+- **寫入**：`selectImgFromLibrary()` → `sheetsWriteImgUrl()` → 成功後更新 in-memory `ann.imgXX`
+- **localStorage cache 已移除**，不再有本地圖片快取
 
 ---
 
 ## 修改注意事項
 
-1. **大範圍修改用 Python**：多個地方同時改，用 `python3 -c` 做字串替換，不要用多次 Edit（容易截斷）
-2. **改完驗證 JS 語法**：用 `node --input-type=module` 執行語法檢查
-3. **safeDate/safeType/safeMmdd** 必須在 `mkContent` 定義之前宣告（目前在行 1003-1011）
-4. **_imgCache** 讀取一律用 `_getImgUrl()`，寫入用 `_setImgUrl()`，不要直接操作
-5. **全域暴露** 在行 1785，新增函式記得加進去
-6. **讀取特定模組**：用 `Read offset=<開始行-1> limit=<結束行-開始行+10>` 精準讀取，不要讀整份
+1. **大範圍修改用 Python**：多個地方同時改，用 `python3 -c` 做字串替換，不要用多次 Edit
+2. **改完驗證 JS 語法**：用 `awk '/^<script>/{found=1; next} found && /^<\/script>/{exit} found{print}' index.html | node --input-type=module`
+3. **全域暴露** 在行 2691，新增函式記得加進去
+4. **讀取特定模組**：用 `Read offset=<開始行-1> limit=<行數+10>` 精準讀取，不要讀整份
+5. **GITHUB_REPO / GITHUB_BRANCH** 現在是函式（`GITHUB_REPO()`、`GITHUB_BRANCH()`），呼叫時要加 `()`
+6. **_rowIndex** 從 Sheet A 欄「列號」欄讀取（`=ROW()`），寫入時直接用，不需要 +1
