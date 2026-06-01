@@ -2621,7 +2621,7 @@ async function sheetsWriteImgUrl(rowIndex, lang, url) {
     : [{ lang, col: langCol[lang] }];
 
   const data = targets.map(({ col }) => ({
-    range:  `'${sheetName}'!${col}${rowIndex + 1}`, // +1 for header row
+    range:  `'${sheetName}'!${col}${rowIndex}`,
     values: [[url]],
   }));
 
