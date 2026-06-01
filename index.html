@@ -1724,6 +1724,8 @@ const _imgMgr = {
   folder: IMG_ROOT,
   // 樂觀更新快取：folderPath → { dirs: [...], imgs: [...] }
   cache: {},
+  // 已刪除的路徑集合（防止 GitHub API 快取把刪掉的東西還給我們）
+  deleted: new Set(),
 };
 
 function _imgMgrPath(...parts) { return parts.filter(Boolean).join('/'); }
@@ -1855,8 +1857,11 @@ async function imgMgrLoad(folder) {
 
 function _imgMgrParseItems(items) {
   return {
-    dirs: items.filter(i => i.type === 'dir').map(i => ({ path: i.path, name: i.name })),
-    imgs: items.filter(i => i.type === 'file' && /\.(png|jpg|jpeg|gif|webp)$/i.test(i.name))
+    dirs: items.filter(i => i.type === 'dir' && !_imgMgr.deleted.has(i.path))
+               .map(i => ({ path: i.path, name: i.name })),
+    imgs: items.filter(i => i.type === 'file'
+                         && /\.(png|jpg|jpeg|gif|webp)$/i.test(i.name)
+                         && !_imgMgr.deleted.has(i.path))
                .map(i => ({ path: i.path, name: i.name, sha: i.sha })),
   };
 }
@@ -2045,7 +2050,8 @@ async function imgMgrDeleteImgConfirm(path, rawUrl, name, btn) {
     if (!sha) throw new Error('找不到檔案 SHA');
     await _githubRequest(token, path, 'DELETE', { message: `Delete ${path}`, sha, branch: GITHUB_BRANCH });
 
-    // 樂觀更新：從快取移除
+    // 樂觀更新：從快取移除，並記錄已刪除
+    _imgMgr.deleted.add(path);
     const folder = _imgMgr.folder;
     if (_imgMgr.cache[folder]) {
       _imgMgr.cache[folder].imgs = _imgMgr.cache[folder].imgs.filter(i => i.path !== path);
@@ -2265,7 +2271,8 @@ async function imgMgrDeleteFolderConfirm(folderPath, name, btn) {
       await _imgMgrDeleteAllFiles(token, files);
     }
 
-    // 樂觀更新
+    // 樂觀更新：從快取移除，並記錄已刪除
+    _imgMgr.deleted.add(folderPath);
     const parent = _imgMgr.cache[_imgMgr.folder];
     if (parent) parent.dirs = parent.dirs.filter(d => d.path !== folderPath);
     delete _imgMgr.cache[folderPath];
