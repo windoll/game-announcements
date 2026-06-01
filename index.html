@@ -1630,13 +1630,22 @@ async function _imgLibLoadFolder(folder) {
 
     loading.style.display = 'none';
 
-    if (!dirs.length && !imgs.length) { empty.style.display = 'block'; _isLoadingImgLib = false; return; }
-
-    const currentImg = _getImgUrl(_imgLibState.annDate, _imgLibState.lang, _imgLibState.annType);
-
     const backHtml = folder !== IMG_ROOT
       ? `<div class="img-lib-back" onclick="_imgLibLoadFolder('${folder.split('/').slice(0,-1).join('/')}')">← 返回上層</div>`
       : '';
+
+    if (!dirs.length && !imgs.length) {
+      empty.style.display = 'block';
+      // 空資料夾仍要顯示返回按鈕
+      if (backHtml) {
+        grid.style.display = 'block';
+        grid.innerHTML = backHtml;
+      }
+      _isLoadingImgLib = false;
+      return;
+    }
+
+    const currentImg = _getImgUrl(_imgLibState.annDate, _imgLibState.lang, _imgLibState.annType);
     const dirHtml = dirs.length
       ? `<div class="img-lib-dirs">${dirs.map(d => `<div class="img-lib-dir" onclick="_imgLibLoadFolder('${d.path}')">📁 ${escHtml(d.name)}</div>`).join('')}</div>`
       : '';
