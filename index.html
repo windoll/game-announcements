@@ -499,6 +499,10 @@ function _parseSheetRows(tbl) {
     contentJP: headers.indexOf('日文內容'),
     titleEN:   headers.indexOf('英文標題'),
     contentEN: headers.indexOf('英文內容'),
+    imgTW:     headers.indexOf('TW圖片'),
+    imgCN:     headers.indexOf('CN圖片'),
+    imgJP:     headers.indexOf('JP圖片'),
+    imgEN:     headers.indexOf('EN圖片'),
   };
   if (ix.date === -1) Object.assign(ix, {date:0,time:1,type:2,titleTW:3,contentTW:4,titleCN:-1,contentCN:-1,titleJP:5,contentJP:6,titleEN:7,contentEN:8});
 
@@ -526,14 +530,20 @@ function _parseSheetRows(tbl) {
     return String(row.c[i].f ?? row.c[i].v);
   };
 
+  // gviz 回傳的 rows 索引對應 Sheet 列號（+2 因為 header 佔第 1 列，rows 從 0 開始）
   return (tbl.rows || [])
-    .map(row => ({
+    .map((row, i) => ({
+      _rowIndex: i + 2, // Sheet 實際列號（1-based，含 header）
       date: getD(row, ix.date), time: getT(row, ix.time),
       type: getV(row, ix.type),
       titleTW: getV(row, ix.titleTW),   contentTW: getV(row, ix.contentTW),
       titleCN: getV(row, ix.titleCN),   contentCN: getV(row, ix.contentCN),
       titleJP: getV(row, ix.titleJP),   contentJP: getV(row, ix.contentJP),
       titleEN: getV(row, ix.titleEN),   contentEN: getV(row, ix.contentEN),
+      imgTW:   getV(row, ix.imgTW),
+      imgCN:   getV(row, ix.imgCN),
+      imgJP:   getV(row, ix.imgJP),
+      imgEN:   getV(row, ix.imgEN),
     }))
     .filter(a => a.date && a.date !== '日期' && a.titleTW && a.titleTW !== '...');
 }
@@ -563,6 +573,7 @@ async function loadSheet() {
     if (!tbl) throw new Error('回傳格式錯誤');
 
     allData = _parseSheetRows(tbl);
+    _syncImgCacheFromSheet(allData);
 
     document.getElementById('list-updated').textContent =
       `上次更新：${new Date().toLocaleString('zh-TW')}`;
@@ -607,6 +618,7 @@ async function loadPastSheet() {
     if (!tbl) throw new Error('回傳格式錯誤');
 
     pastData    = _parseSheetRows(tbl);
+    _syncImgCacheFromSheet(pastData);
     _pastLoaded = true;
     renderPastList();
   } catch(e) {
@@ -683,6 +695,24 @@ function renderPastList() {
   });
 
   document.getElementById('list-area').innerHTML = html;
+}
+
+
+// Sheet 圖片欄位 → _imgCache（Sheet 為主，不覆蓋空值）
+function _syncImgCacheFromSheet(rows) {
+  let changed = false;
+  rows.forEach(a => {
+    const langMap = { TW: a.imgTW, CN: a.imgCN, JP: a.imgJP, EN: a.imgEN };
+    Object.entries(langMap).forEach(([lang, url]) => {
+      if (!url) return;
+      const current = _getImgUrl(a.date, lang, a.type);
+      if (current !== url) {
+        _setImgUrl(a.date, lang, url, a.type);
+        changed = true;
+      }
+    });
+  });
+  if (changed) _saveImgCache();
 }
 
 // ══ MODULE: DATE UTILS ═══════════════════════════════════════════
@@ -1858,6 +1888,30 @@ function selectImgFromLibrary(e, url) {
   e.currentTarget.classList.add('selected');
   _imgLibRenderLangTabs();
   toast(`✅ 已套用到 ${_imgLibState.lang}`);
+
+  // 非同步寫回 Sheet（不阻擋 UI）
+  _sheetsWriteImgFromLibrary(_imgLibState.annDate, _imgLibState.annType, _imgLibState.lang, url);
+}
+
+async function _sheetsWriteImgFromLibrary(annDate, annType, lang, url) {
+  // 從 allData / pastData 找對應的 _rowIndex
+  const ann = [...allData, ...pastData].find(a => a.date === annDate && a.type === annType);
+  if (!ann || !ann._rowIndex) {
+    console.warn('sheetsWrite: 找不到對應的列號', annDate, annType);
+    return;
+  }
+  try {
+    await sheetsWriteImgUrl(ann._rowIndex, lang, url);
+    toast(`☁ 已同步寫入 Sheet（${lang}）`);
+  } catch(e) {
+    // OAuth 未登入時不強制提示，只在 console 記錄
+    if (e.message.includes('尚未登入')) {
+      console.info('sheetsWrite: 尚未登入 Google，僅存本地快取');
+    } else {
+      toast(`⚠️ 寫入 Sheet 失敗：${e.message}`);
+      console.warn('sheetsWrite failed', e);
+    }
+  }
 }
 
 function closeImgLibrary() {
@@ -2618,8 +2672,8 @@ async function sheetsWriteImgUrl(rowIndex, lang, url) {
 
   const accessToken = await gauthGetAccessToken();
 
-  // 語系對應到欄位（G=TW, H=CN, I=JP, J=EN，依你的 Sheet 結構調整）
-  const langCol = { TW: 'G', CN: 'H', JP: 'I', EN: 'J' };
+  // H=TW圖片, I=CN圖片, J=JP圖片, K=EN圖片
+  const langCol = { TW: 'H', CN: 'I', JP: 'J', EN: 'K' };
 
   const targets = lang === 'ALL'
     ? Object.entries(langCol).map(([l, col]) => ({ lang: l, col }))
