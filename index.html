@@ -176,9 +176,21 @@
         <input type="text" id="cfg-sheet-gid" placeholder="e.g. 1281351206" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
         <div class="cfg-hint">在試算表網址 ?gid= 後面的數字</div>
 
+        <div class="field-label">GitHub Repo</div>
+        <input type="text" id="cfg-github-repo" placeholder="username/repo-name" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
+
+        <div class="field-label">GitHub Branch</div>
+        <input type="text" id="cfg-github-branch" placeholder="main" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
+
         <div class="field-label">GitHub Personal Access Token</div>
         <input type="password" id="cfg-github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
-        <div class="cfg-hint-top">用於上傳圖片到 GitHub repo（windoll/game-announcements）</div>
+        <div class="cfg-hint-top">用於上傳圖片到 GitHub repo</div>
+
+        <div class="field-label">N8N Webhook（正式）</div>
+        <input type="text" id="cfg-n8n-webhook-prod" placeholder="https://...app.n8n.cloud/webhook/..." class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
+
+        <div class="field-label">N8N Webhook（測試）</div>
+        <input type="text" id="cfg-n8n-webhook-test" placeholder="https://...app.n8n.cloud/webhook-test/..." class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
       </div>
 
       <!-- Google OAuth -->
@@ -345,9 +357,13 @@ const IMG_ROOT    = 'images';
 // ══ MODULE: CONFIG ══════════════════════════════════════════════
 
 const DEFAULTS = {
-  projectName: '公告管理',
-  sheetId:     '',
-  sheetGid:    '',
+  projectName:     '公告管理',
+  sheetId:         '',
+  sheetGid:        '',
+  githubRepo:      '',
+  githubBranch:    'main',
+  n8nWebhookProd:  '',
+  n8nWebhookTest:  '',
   announcementTypes: [
     { name: '維護更新',  langs: [{ lang: 'all', webhook: '' }] },
     { name: '活動公告',  langs: [{ lang: 'TW', webhook: '' }, { lang: 'JP', webhook: '' }, { lang: 'EN', webhook: '' }] }
@@ -361,10 +377,10 @@ const DEFAULTS = {
 
 const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
 const SECRET_TOKEN       = 'zx9k-Q7mP-4rNw-Hj2T';
-const N8N_WEBHOOK_PROD   = 'https://charlie98783.app.n8n.cloud/webhook/send-announcement';
-const N8N_WEBHOOK_TEST   = 'https://charlie98783.app.n8n.cloud/webhook-test/send-announcement';
 
-function N8N_WEBHOOK() { return getCfg().testMode ? N8N_WEBHOOK_TEST : N8N_WEBHOOK_PROD; }
+function N8N_WEBHOOK() { const cfg = getCfg(); return cfg.testMode ? cfg.n8nWebhookTest : cfg.n8nWebhookProd; }
+function GITHUB_REPO()   { return getCfg().githubRepo; }
+function GITHUB_BRANCH() { return getCfg().githubBranch || 'main'; }
 
 function getCfg() { return cfgStore.get(); }
 
@@ -1217,10 +1233,14 @@ async function confirmSend() {
 
 function loadSettings() {
   const cfg = getCfg();
-  document.getElementById('cfg-project-name').value = cfg.projectName || '';
-  document.getElementById('cfg-sheet-id').value     = cfg.sheetId     || '';
-  document.getElementById('cfg-sheet-gid').value    = cfg.sheetGid    || '';
-  document.getElementById('cfg-github-token').value        = cfg.githubToken        || '';
+  document.getElementById('cfg-project-name').value     = cfg.projectName     || '';
+  document.getElementById('cfg-sheet-id').value         = cfg.sheetId         || '';
+  document.getElementById('cfg-sheet-gid').value        = cfg.sheetGid        || '';
+  document.getElementById('cfg-github-repo').value      = cfg.githubRepo      || '';
+  document.getElementById('cfg-github-branch').value    = cfg.githubBranch    || 'main';
+  document.getElementById('cfg-github-token').value     = cfg.githubToken     || '';
+  document.getElementById('cfg-n8n-webhook-prod').value = cfg.n8nWebhookProd  || '';
+  document.getElementById('cfg-n8n-webhook-test').value = cfg.n8nWebhookTest  || '';
   document.getElementById('cfg-oauth-client-id').value     = cfg.oauthClientId     || '';
   document.getElementById('cfg-oauth-client-secret').value  = cfg.oauthClientSecret  || '';
   gauthRenderStatus();
@@ -1404,10 +1424,14 @@ function clearCfgUnsaved() {
 function saveSettings() {
   const cfg = getCfg();
   const updated = Object.assign({}, cfg, {
-    projectName: document.getElementById('cfg-project-name').value.trim(),
-    sheetId:     document.getElementById('cfg-sheet-id').value.trim(),
-    sheetGid:    document.getElementById('cfg-sheet-gid').value.trim(),
-    githubToken:       document.getElementById('cfg-github-token').value.trim(),
+    projectName:     document.getElementById('cfg-project-name').value.trim(),
+    sheetId:         document.getElementById('cfg-sheet-id').value.trim(),
+    sheetGid:        document.getElementById('cfg-sheet-gid').value.trim(),
+    githubRepo:      document.getElementById('cfg-github-repo').value.trim(),
+    githubBranch:    document.getElementById('cfg-github-branch').value.trim() || 'main',
+    githubToken:     document.getElementById('cfg-github-token').value.trim(),
+    n8nWebhookProd:  document.getElementById('cfg-n8n-webhook-prod').value.trim(),
+    n8nWebhookTest:  document.getElementById('cfg-n8n-webhook-test').value.trim(),
     oauthClientId:     document.getElementById('cfg-oauth-client-id').value.trim(),
     oauthClientSecret: document.getElementById('cfg-oauth-client-secret').value.trim(),
   });
@@ -1615,7 +1639,7 @@ function textToRtf(text) {
  * PUT  → uploads content (base64 string), returns raw URL
  */
 async function _githubRequest(token, path, method = 'GET', body = null) {
-  const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`;
+  const url = `https://api.github.com/repos/${GITHUB_REPO()}/contents/${path}`;
   const opts = {
     method,
     headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
@@ -1639,8 +1663,6 @@ async function _githubGetSha(token, path) {
 
 // ══ MODULE: GITHUB IMAGE ═════════════════════════════════════════
 
-const GITHUB_REPO   = 'windoll/game-announcements';
-const GITHUB_BRANCH = 'main';
 
 // 取得指定語系的圖片 URL（直接從 allData/pastData 讀，Sheet 為唯一來源）
 function _getImgUrl(annDate, lang, annType) {
@@ -1654,10 +1676,10 @@ function _getImgUrl(annDate, lang, annType) {
 
 async function _githubPut(token, path, base64) {
   const sha = await _githubGetSha(token, path);
-  const body = { message: `Upload ${path}`, content: base64, branch: GITHUB_BRANCH };
+  const body = { message: `Upload ${path}`, content: base64, branch: GITHUB_BRANCH() };
   if (sha) body.sha = sha;
   await _githubRequest(token, path, 'PUT', body);
-  return `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${path}`;
+  return `https://raw.githubusercontent.com/${GITHUB_REPO()}/${GITHUB_BRANCH()}/${path}`;
 }
 
 async function _githubListImages(token, folder) {
@@ -1665,7 +1687,7 @@ async function _githubListImages(token, folder) {
     const items = await _githubRequest(token, folder);
     if (!items) return [];
     return items.filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name))
-      .map(f => ({ name: f.name, url: `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${folder}/${f.name}` }));
+      .map(f => ({ name: f.name, url: `https://raw.githubusercontent.com/${GITHUB_REPO()}/${GITHUB_BRANCH()}/${folder}/${f.name}` }));
   } catch { return []; }
 }
 
@@ -1785,7 +1807,7 @@ async function _imgLibLoadFolder(folder) {
       ? `<div class="img-lib-dirs">${dirs.map(d => `<div class="img-lib-dir" onclick="_imgLibLoadFolder('${d.path}')">📁 ${escHtml(d.name)}</div>`).join('')}</div>`
       : '';
     const imgHtml = imgs.map(img => {
-      const url      = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${img.path}`;
+      const url      = `https://raw.githubusercontent.com/${GITHUB_REPO()}/${GITHUB_BRANCH()}/${img.path}`;
       const safeUrl  = escUrl(url);
       const safeName = escHtml(img.name);
       const isActive = currentImg && safeUrl.split('?')[0] === escUrl(currentImg).split('?')[0];
@@ -1931,7 +1953,7 @@ function _imgMgrRender() {
   if (imgs.length) {
     html += `<div class="imgmgr-section-label">圖片（${imgs.length}）</div><div class="imgmgr-img-grid">`;
     imgs.forEach(img => {
-      const rawUrl   = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${img.path}`;
+      const rawUrl   = `https://raw.githubusercontent.com/${GITHUB_REPO()}/${GITHUB_BRANCH()}/${img.path}`;
       const safeUrl  = escHtml(rawUrl);
       const safeName = escHtml(img.name);
       const safePath = escHtml(img.path);
@@ -2189,7 +2211,7 @@ async function imgMgrDeleteImgConfirm(path, rawUrl, name, btn) {
   try {
     const sha = await _githubGetSha(token, path);
     if (!sha) throw new Error('找不到檔案 SHA');
-    await _githubRequest(token, path, 'DELETE', { message: `Delete ${path}`, sha, branch: GITHUB_BRANCH });
+    await _githubRequest(token, path, 'DELETE', { message: `Delete ${path}`, sha, branch: GITHUB_BRANCH() });
 
     // 樂觀更新：從快取移除，並記錄已刪除
     _imgMgr.deleted.add(path);
@@ -2348,7 +2370,7 @@ async function imgMgrRenameCommit(folderPath, oldName, inputEl) {
       await _githubPut(token, _imgMgrPath(newPath, '.gitkeep'), btoa(''));
       const oldKeep = _imgMgrPath(folderPath, '.gitkeep');
       const sha = await _githubGetSha(token, oldKeep);
-      if (sha) await _githubRequest(token, oldKeep, 'DELETE', { message: `Delete ${oldKeep}`, sha, branch: GITHUB_BRANCH });
+      if (sha) await _githubRequest(token, oldKeep, 'DELETE', { message: `Delete ${oldKeep}`, sha, branch: GITHUB_BRANCH() });
     } else {
       for (const file of files) {
         const relPath  = file.path.slice(folderPath.length + 1);
@@ -2407,7 +2429,7 @@ async function imgMgrDeleteFolderConfirm(folderPath, name, btn) {
     if (!files.length) {
       const gitkeepPath = _imgMgrPath(folderPath, '.gitkeep');
       const sha = await _githubGetSha(token, gitkeepPath);
-      if (sha) await _githubRequest(token, gitkeepPath, 'DELETE', { message: `Delete ${gitkeepPath}`, sha, branch: GITHUB_BRANCH });
+      if (sha) await _githubRequest(token, gitkeepPath, 'DELETE', { message: `Delete ${gitkeepPath}`, sha, branch: GITHUB_BRANCH() });
     } else {
       await _imgMgrDeleteAllFiles(token, files);
     }
@@ -2444,7 +2466,7 @@ async function _imgMgrDeleteAllFiles(token, files) {
   for (const file of files) {
     const sha = file.sha || await _githubGetSha(token, file.path);
     if (!sha) continue;
-    await _githubRequest(token, file.path, 'DELETE', { message: `Delete ${file.path}`, sha, branch: GITHUB_BRANCH });
+    await _githubRequest(token, file.path, 'DELETE', { message: `Delete ${file.path}`, sha, branch: GITHUB_BRANCH() });
   }
 }
 
@@ -2683,4 +2705,4 @@ Object.assign(window, {
 </script>
 </body>
 </html>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
