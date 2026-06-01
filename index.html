@@ -1624,11 +1624,17 @@ async function _imgLibLoadFolder(folder) {
   if (!token) { loading.textContent = '請先在設定頁填入 GitHub Token'; _isLoadingImgLib = false; return; }
 
   try {
-    const items = await _githubRequest(token, folder);
-    if (!items) { loading.textContent = '載入失敗：找不到資料夾'; _isLoadingImgLib = false; return; }
-
-    const dirs = items.filter(i => i.type === 'dir');
-    const imgs = items.filter(i => i.type === 'file' && /\.(png|jpg|jpeg|gif|webp)$/i.test(i.name));
+    // 優先使用圖片管理頁的共用快取，有快取就不重發 API
+    let dirs, imgs;
+    if (_imgMgr.cache[folder]) {
+      ({ dirs, imgs } = _imgMgr.cache[folder]);
+    } else {
+      const items = await _githubRequest(token, folder);
+      if (!items) { loading.textContent = '載入失敗：找不到資料夾'; _isLoadingImgLib = false; return; }
+      const parsed = _imgMgrParseItems(items);
+      _imgMgr.cache[folder] = parsed;
+      ({ dirs, imgs } = parsed);
+    }
 
     loading.style.display = 'none';
 
