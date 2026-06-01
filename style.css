@@ -651,3 +651,6 @@ body {
   background: #ede9fe; padding: 1px 5px; border-radius: 4px;
   font-family: monospace; font-size: 0.8rem;
 }
+
+/* ── 初始隱藏 ── */
+.hidden { display: none !important; }

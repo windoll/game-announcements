@@ -4,7 +4,7 @@
 
 | 檔案 | 說明 | 行數 |
 |------|------|------|
-| `index.html` | HTML 結構 + JS 邏輯 | ~2713 行 |
+| `index.html` | HTML 結構 + JS 邏輯 | ~2707 行 |
 | `style.css` | 所有 CSS 樣式 | ~420 行 |
 | `deploy.bat` | 部署腳本（git add -A → commit → pull → push） | - |
 
@@ -35,19 +35,19 @@
 | 439–465 | **AUTH** | `checkPassword()`、`initApp()` |
 | 466–478 | **STATE** | `allData`、`pastData`、`_activeTab`、`_pastLoaded`、`pendingAnn`、`_annMap`、`_modalAnn`、`_modalMessages` |
 | 479–489 | **NAV** | `showPage()` |
-| 490–743 | **SHEET** | `_sheetColMap`、`_parseSheetRows()`、`_resolveSheetColMap()`、`loadSheet()`、`loadPastSheet()` |
-| 744–802 | **DATE UTILS** | `parseDate()`（含跨年修正）、`getStatus()`、`badgeClass()` |
-| 803–838 | **SCHEDULE STORE** | `_getScheduleBadgesHtml()`、`deleteSchedule()` |
-| 839–990 | **RENDER LIST** | `_filterAndSort()`、`_buildCardHtml()`、`renderList()`、`toggleCard()` |
-| 991–1230 | **SEND MODAL** | `openSendModal()`、`renderModalLangs()`、`closeModal()`、`confirmSend()` |
-| 1231–1478 | **SETTINGS** | `loadSettings()`、`toggleTestMode()`、`applyTestModeUI()`、`saveSettings()`、設定頁類型管理 |
-| 1479–1639 | **EROLABS** | `buildErolabsDocs()`、`_doGenerateErolabs()`、`trimMaintContent()`、`textToRtf()` |
-| 1640–1669 | **GITHUB API** | `_githubRequest()`、`_githubGetSha()` |
-| 1670–1721 | **GITHUB IMAGE** | `_getImgUrl()`、`_githubPut()`、`_githubListImages()`、`clearAnnImg()` |
-| 1722–1893 | **IMAGE LIBRARY** | `openImgLibrary()`、`_imgLibLoadFolder()`、`switchImgLangTab()`、`selectImgFromLibrary()`、`closeImgLibrary()` |
-| 1894–2479 | **IMAGE MANAGER** | `imgMgrLoad()`、`imgMgrGoTo()`、上傳、刪除、重新命名資料夾等 |
-| 2480–2676 | **GOOGLE OAUTH** | `gauthStart()`、`gauthGetAccessToken()`、`_resolveSheetName()`、`sheetsWriteImgUrl()` |
-| 2677–2713 | **INIT** | `DOMContentLoaded`、`Object.assign(window, {...})` 全域暴露（行 2691） |
+| 498–751 | **SHEET** | `_sheetColMap`、`_parseSheetRows()`、`_resolveSheetColMap()`、`loadSheet()`、`loadPastSheet()` |
+| 752–810 | **DATE UTILS** | `parseDate()`（含跨年修正）、`getStatus()`、`badgeClass()` |
+| 811–846 | **SCHEDULE STORE** | `_getScheduleBadgesHtml()`、`deleteSchedule()` |
+| 847–993 | **RENDER LIST** | `_filterAndSort()`、`_buildCardHtml()`、`renderList()`、`toggleCard()` |
+| 994–1233 | **SEND MODAL** | `openSendModal()`、`renderModalLangs()`、`closeModal()`、`confirmSend()` |
+| 1234–1481 | **SETTINGS** | `loadSettings()`、`toggleTestMode()`、`applyTestModeUI()`、`saveSettings()`、設定頁類型管理 |
+| 1482–1642 | **EROLABS** | `buildErolabsDocs()`、`_doGenerateErolabs()`、`trimMaintContent()`、`textToRtf()` |
+| 1643–1672 | **GITHUB API** | `_githubRequest()`、`_githubGetSha()` |
+| 1673–1724 | **GITHUB IMAGE** | `_getImgUrl()`、`_githubPut()`、`_githubListImages()`、`clearAnnImg()` |
+| 1725–1887 | **IMAGE LIBRARY** | `openImgLibrary()`、`_imgLibLoadFolder()`、`switchImgLangTab()`、`selectImgFromLibrary()`、`closeImgLibrary()` |
+| 1888–2472 | **IMAGE MANAGER** | `imgMgrLoad()`、`imgMgrRefresh()`、上傳、刪除、重新命名資料夾等 |
+| 2473–2669 | **GOOGLE OAUTH** | `gauthStart()`、`gauthGetAccessToken()`、`_resolveSheetName()`、`sheetsWriteImgUrl()` |
+| 2670–2707 | **INIT** | `DOMContentLoaded`、`Object.assign(window, {...})` 全域暴露（行 2684） |
 
 ---
 
