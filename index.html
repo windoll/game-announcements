@@ -2682,6 +2682,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 Object.assign(window, {
+  get _debugAllData() { return allData; },
   stopProp, checkPassword, showPage, loadSheet, renderList, toggleCard,
   gauthStart, gauthInputCode, gauthSignOut,
   switchListTab, reloadCurrentTab, renderPastList,
