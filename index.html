@@ -707,8 +707,6 @@ function renderPastList() {
   const q  = (document.getElementById('q-past')?.value || '').toLowerCase();
   const tf = document.getElementById('tf-past')?.value || '';
 
-  const schedulesAll = scheduleStore.get();
-
   let list = pastData.filter(a => {
     if (q  && !(a.titleTW + a.date + a.type).toLowerCase().includes(q)) return false;
     if (tf && !a.type.includes(tf)) return false;
