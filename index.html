@@ -164,35 +164,20 @@
       <div class="page-title">⚙️ 設定</div>
       <div class="page-sub">調整後點「儲存設定」即可生效（儲存在此瀏覽器）</div>
 
+      <!-- 基本資訊 -->
       <div class="card">
         <div class="cfg-section-title">📋 基本資訊</div>
         <div class="field-label">專案名稱（顯示在側邊欄）</div>
-        <input type="text" id="cfg-project-name" placeholder="雀星公告管理" class="cfg-input" oninput="markCfgUnsaved()">
+        <input type="text" id="cfg-project-name" placeholder="雀星公告管理" class="cfg-input" style="margin-bottom:0;" oninput="markCfgUnsaved()">
+      </div>
+
+      <!-- Google -->
+      <div class="card card-no-top">
+        <div class="cfg-section-title">🟢 Google</div>
 
         <div class="field-label">Google Sheet 網址</div>
         <input type="text" id="cfg-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/.../edit?gid=..." class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
         <div class="cfg-hint">貼上試算表完整網址，系統會自動拆解 ID 和工作表 GID</div>
-
-        <div class="field-label">GitHub Repo</div>
-        <input type="text" id="cfg-github-repo" placeholder="username/repo-name" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
-
-        <div class="field-label">GitHub Branch</div>
-        <input type="text" id="cfg-github-branch" placeholder="main" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
-
-        <div class="field-label">GitHub Personal Access Token</div>
-        <input type="password" id="cfg-github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
-        <div class="cfg-hint-top">用於上傳圖片到 GitHub repo</div>
-
-        <div class="field-label">N8N Webhook URL</div>
-        <input type="text" id="cfg-n8n-webhook-prod" placeholder="https://...app.n8n.cloud/webhook/..." class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
-        <div class="cfg-hint">測試模式時自動將 /webhook/ 替換為 /webhook-test/</div>
-      </div>
-
-      <!-- Google OAuth -->
-      <div class="card card-no-top">
-        <div class="cfg-section-title">🔑 Google 帳號授權（寫入試算表）</div>
-        <div id="gauth-status" class="gauth-status gauth-unsigned">尚未登入</div>
-        <div class="cfg-hint" style="margin-bottom:14px;">用於將圖片 URL 寫回 Google Sheet，授權後 token 儲存於此瀏覽器</div>
 
         <div class="field-label">OAuth Client ID</div>
         <input type="text" id="cfg-oauth-client-id" placeholder="xxxx.apps.googleusercontent.com"
@@ -202,12 +187,35 @@
         <input type="password" id="cfg-oauth-client-secret" placeholder="GOCSPX-xxxx"
                class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
 
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+        <div id="gauth-status" class="gauth-status gauth-unsigned" style="margin-top:10px;">尚未登入</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
           <button class="btn btn-primary btn-sm" onclick="gauthStart()">🔑 登入 Google</button>
           <button class="btn btn-outline btn-sm" onclick="gauthInputCode()">📋 貼上授權碼</button>
           <button class="btn btn-outline btn-sm" id="gauth-signout-btn" onclick="gauthSignOut()" style="display:none;">登出</button>
         </div>
         <div id="gauth-hint" class="gauth-hint" style="display:none;"></div>
+      </div>
+
+      <!-- GitHub -->
+      <div class="card card-no-top">
+        <div class="cfg-section-title">🐙 GitHub</div>
+
+        <div class="field-label">Repo</div>
+        <input type="text" id="cfg-github-repo" placeholder="username/repo-name" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
+
+        <div class="field-label">Branch</div>
+        <input type="text" id="cfg-github-branch" placeholder="main" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
+
+        <div class="field-label">Personal Access Token</div>
+        <input type="password" id="cfg-github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
+      </div>
+
+      <!-- N8N -->
+      <div class="card card-no-top">
+        <div class="cfg-section-title">⚡ N8N</div>
+        <div class="field-label">Webhook URL</div>
+        <input type="text" id="cfg-n8n-webhook-prod" placeholder="https://...app.n8n.cloud/webhook/..." class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
+        <div class="cfg-hint">測試模式時自動將 /webhook/ 替換為 /webhook-test/</div>
       </div>
 
       <!-- 測試模式開關 -->
