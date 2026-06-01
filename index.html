@@ -1167,11 +1167,9 @@ async function confirmSend() {
     return;
   }
 
-  // 排程衝突提示：此公告已有未來排程
-  const existingSchedules = (scheduleStore.get()[pendingAnn.date] || []);
-  if (existingSchedules.length > 0) {
-    const existing = existingSchedules.map(r => `${r.sendDate} ${r.sendTime}`).join('、');
-    const confirmed = confirm(`⚠️ 此公告已有排程：${existing}\n\n確定要再新增一個排程嗎？`);
+  // 排程衝突提示：此公告已有排程
+  if (pendingAnn.discordSchedule) {
+    const confirmed = confirm(`⚠️ 此公告已有排程：${pendingAnn.discordSchedule}\n\n確定要覆蓋嗎？`);
     if (!confirmed) return;
   }
 
