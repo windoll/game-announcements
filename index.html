@@ -503,6 +503,7 @@ function _parseSheetRows(tbl) {
     imgCN:     headers.indexOf('CN圖片'),
     imgJP:     headers.indexOf('JP圖片'),
     imgEN:     headers.indexOf('EN圖片'),
+    rowNum:    headers.indexOf('列號'),
   };
   if (ix.date === -1) Object.assign(ix, {date:0,time:1,type:2,titleTW:3,contentTW:4,titleCN:-1,contentCN:-1,titleJP:5,contentJP:6,titleEN:7,contentEN:8});
 
@@ -533,7 +534,7 @@ function _parseSheetRows(tbl) {
   // gviz 回傳的 rows 索引對應 Sheet 列號（+2 因為 header 佔第 1 列，rows 從 0 開始）
   return (tbl.rows || [])
     .map((row, i) => ({
-      _rowIndex: i + 2, // Sheet 實際列號（1-based，含 header）
+      _rowIndex: ix.rowNum >= 0 ? parseInt(getV(row, ix.rowNum)) || (i + 2) : i + 2, // Sheet 實際列號
       date: getD(row, ix.date), time: getT(row, ix.time),
       type: getV(row, ix.type),
       titleTW: getV(row, ix.titleTW),   contentTW: getV(row, ix.contentTW),
