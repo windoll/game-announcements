@@ -81,34 +81,68 @@
       <div class="imgmgr-toolbar">
         <div class="imgmgr-breadcrumb" id="imgmgr-breadcrumb"></div>
         <div class="imgmgr-toolbar-actions">
-          <label class="btn btn-primary btn-sm" id="imgmgr-upload-label">
-            ⬆ 上傳圖片
-            <input type="file" id="imgmgr-file-input" accept="image/*" style="display:none" onchange="imgMgrOnFileSelect(this)">
-          </label>
+          <button class="btn btn-primary btn-sm" onclick="imgMgrOpenUpload()">⬆ 上傳圖片</button>
           <button class="btn btn-outline btn-sm" onclick="imgMgrNewFolder()">📁 新增資料夾</button>
           <button class="btn btn-outline btn-sm" onclick="imgMgrRefresh()">↻ 重新整理</button>
         </div>
       </div>
 
-      <!-- 上傳預覽區 -->
-      <div id="imgmgr-upload-preview" class="imgmgr-upload-preview" style="display:none;">
-        <img id="imgmgr-preview-img" src="" alt="">
-        <div class="imgmgr-upload-info">
-          <div class="field-label">檔名（上傳前可修改）</div>
-          <input type="text" id="imgmgr-filename-input" class="cfg-input" style="margin-bottom:8px;">
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary btn-sm" id="imgmgr-confirm-upload-btn" onclick="imgMgrConfirmUpload()">⬆ 確認上傳</button>
-            <button class="btn btn-outline btn-sm" onclick="imgMgrCancelUpload()">取消</button>
-          </div>
-          <div id="imgmgr-upload-status" class="imgmgr-upload-status"></div>
-        </div>
+      <!-- 拖放提示 -->
+      <div id="imgmgr-dropzone" class="imgmgr-dropzone" style="display:none;">
+        <span>放開以上傳圖片</span>
       </div>
 
       <!-- 圖片內容區 -->
       <div id="imgmgr-loading" class="loading" style="display:none;">載入中…</div>
-      <div id="imgmgr-empty"   class="empty"   style="display:none;">此資料夾沒有任何內容</div>
-      <div id="imgmgr-grid"    class="imgmgr-grid"></div>
+      <div id="imgmgr-empty"   class="empty"   style="display:none;">此資料夾沒有任何內容，可拖放圖片或點「上傳圖片」</div>
+      <div id="imgmgr-grid"    class="imgmgr-grid"
+           ondragover="imgMgrOnDragOver(event)"
+           ondragleave="imgMgrOnDragLeave(event)"
+           ondrop="imgMgrOnDrop(event)"></div>
     </div>
+
+    <!-- 上傳 Modal -->
+    <div class="modal-bg" id="modal-imgmgr-upload">
+      <div class="modal modal-img">
+        <h3>⬆ 上傳圖片</h3>
+
+        <!-- 拖放 / 選檔區 -->
+        <div id="imgmgr-modal-dropzone" class="imgmgr-modal-dropzone"
+             ondragover="imgMgrModalDragOver(event)"
+             ondragleave="imgMgrModalDragLeave(event)"
+             ondrop="imgMgrModalDrop(event)"
+             onclick="document.getElementById('imgmgr-modal-file-input').click()">
+          <div class="imgmgr-modal-drop-icon">🖼</div>
+          <div class="imgmgr-modal-drop-text">拖放圖片至此，或點擊選擇檔案</div>
+          <div class="imgmgr-modal-drop-hint">支援 PNG、JPG、GIF、WebP</div>
+          <input type="file" id="imgmgr-modal-file-input" accept="image/*" style="display:none"
+                 onchange="imgMgrModalOnFileSelect(this)">
+        </div>
+
+        <!-- 預覽 + 設定 -->
+        <div id="imgmgr-modal-preview-wrap" style="display:none;">
+          <div class="imgmgr-modal-preview-row">
+            <img id="imgmgr-modal-preview-img" src="" alt="" class="imgmgr-modal-preview-img">
+            <div class="imgmgr-modal-preview-info">
+              <div class="field-label">檔名</div>
+              <input type="text" id="imgmgr-modal-filename" class="cfg-input" style="margin-bottom:12px;"
+                     onkeydown="if(event.key==='Enter')imgMgrModalUpload()">
+              <div class="field-label">上傳到</div>
+              <select id="imgmgr-modal-folder" class="cfg-input" style="margin-bottom:0;"></select>
+            </div>
+          </div>
+          <div id="imgmgr-modal-status" class="imgmgr-upload-status" style="margin-top:8px;"></div>
+        </div>
+
+        <div class="modal-footer modal-footer-sm">
+          <button class="btn btn-outline" onclick="imgMgrCloseUpload()">關閉</button>
+          <button class="btn btn-primary" id="imgmgr-modal-upload-btn"
+                  onclick="imgMgrModalUpload()" style="display:none;">⬆ 上傳</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 刪除確認條（inline，插入 grid 中） -->
 
     <!-- 設定頁 -->
     <div id="page-settings" class="page">
@@ -1670,33 +1704,109 @@ function closeImgLibrary() {
 // ══ MODULE: IMAGE MANAGER ════════════════════════════════════════
 
 const _imgMgr = {
-  folder:      IMG_ROOT,   // 目前瀏覽的路徑
-  fileObj:     null,        // 待上傳的 File 物件
-  pendingName: '',          // 待上傳的檔名（可改）
+  folder: IMG_ROOT,
+  // 樂觀更新快取：folderPath → { dirs: [...], imgs: [...] }
+  cache: {},
 };
 
-function _imgMgrPath(...parts) {
-  return parts.filter(Boolean).join('/');
-}
+function _imgMgrPath(...parts) { return parts.filter(Boolean).join('/'); }
 
-// 麵包屑：['images', '0520'] → 可點擊導覽
+// ── 麵包屑 ────────────────────────────────────────────────────
+
 function _imgMgrRenderBreadcrumb() {
   const el = document.getElementById('imgmgr-breadcrumb');
   if (!el) return;
-  const parts  = _imgMgr.folder.split('/');          // ['images', '0520', ...]
-  let html = '';
-  parts.forEach((p, i) => {
-    const path = parts.slice(0, i + 1).join('/');
+  const parts = _imgMgr.folder.split('/');
+  el.innerHTML = parts.map((p, i) => {
+    const path   = parts.slice(0, i + 1).join('/');
     const isLast = i === parts.length - 1;
-    if (isLast) {
-      html += `<span class="imgmgr-crumb imgmgr-crumb-cur">${escHtml(p)}</span>`;
-    } else {
-      html += `<span class="imgmgr-crumb" onclick="imgMgrGoTo('${escHtml(path)}')">${escHtml(p)}</span>`;
-      html += `<span class="imgmgr-crumb-sep">›</span>`;
-    }
-  });
-  el.innerHTML = html;
+    return isLast
+      ? `<span class="imgmgr-crumb imgmgr-crumb-cur">${escHtml(p)}</span>`
+      : `<span class="imgmgr-crumb" onclick="imgMgrGoTo('${escHtml(path)}')">${escHtml(p)}</span>
+         <span class="imgmgr-crumb-sep">›</span>`;
+  }).join('');
 }
+
+// ── 渲染（純 render，不發 API）────────────────────────────────
+
+function _imgMgrRender() {
+  const loading = document.getElementById('imgmgr-loading');
+  const empty   = document.getElementById('imgmgr-empty');
+  const grid    = document.getElementById('imgmgr-grid');
+  _imgMgrRenderBreadcrumb();
+
+  const cached = _imgMgr.cache[_imgMgr.folder];
+  if (!cached) return; // 尚未載入
+
+  const { dirs, imgs } = cached;
+
+  loading.style.display = 'none';
+
+  if (!dirs.length && !imgs.length) {
+    empty.style.display = 'block';
+    grid.style.display  = 'none';
+    grid.innerHTML      = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  grid.style.display  = 'block';
+
+  let html = '';
+
+  // ── 資料夾區 ──
+  if (dirs.length) {
+    html += `<div class="imgmgr-section-label">資料夾</div><div class="imgmgr-dir-row" id="imgmgr-dir-row">`;
+    dirs.forEach(d => {
+      html += _imgMgrDirHtml(d.path, d.name);
+    });
+    html += `</div>`;
+  }
+
+  // ── 圖片區 ──
+  if (imgs.length) {
+    html += `<div class="imgmgr-section-label">圖片（${imgs.length}）</div><div class="imgmgr-img-grid">`;
+    imgs.forEach(img => {
+      const rawUrl   = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${img.path}`;
+      const safeUrl  = escHtml(rawUrl);
+      const safeName = escHtml(img.name);
+      const safePath = escHtml(img.path);
+      const usedBy   = _imgMgrFindUsage(rawUrl);
+      const usedBadge = usedBy.length
+        ? `<div class="imgmgr-used-badge" title="${escHtml(usedBy.join('\n'))}">使用中 ${usedBy.length}</div>` : '';
+      html += `
+<div class="imgmgr-img-card" id="imgcard-${safePath.replace(/\//g,'-')}">
+  <div class="imgmgr-img-wrap">
+    <img src="${safeUrl}" loading="lazy" onclick="window.open('${safeUrl}','_blank')">
+    ${usedBadge}
+  </div>
+  <div class="imgmgr-img-name" title="${safeName}">${safeName}</div>
+  <div class="imgmgr-img-actions">
+    <button class="btn btn-outline btn-sm imgmgr-del-btn"
+      onclick="imgMgrDeleteImg('${safePath}','${safeUrl}','${safeName}',this)">🗑 刪除</button>
+  </div>
+</div>`;
+    });
+    html += `</div>`;
+  }
+
+  grid.innerHTML = html;
+}
+
+function _imgMgrDirHtml(dirPath, dirName) {
+  const safePath = escHtml(dirPath);
+  const safeName = escHtml(dirName);
+  return `<div class="imgmgr-dir-item" id="imgdir-${safePath.replace(/\//g,'-')}">
+    <span class="imgmgr-dir-icon" onclick="imgMgrGoTo('${safePath}')">📁</span>
+    <span class="imgmgr-dir-name" title="${safeName}" onclick="imgMgrGoTo('${safePath}')">${safeName}</span>
+    <div class="imgmgr-dir-actions">
+      <button class="imgmgr-dir-btn" onclick="stopProp(event);imgMgrStartRenameFolder('${safePath}','${safeName}')" title="重命名">✏️</button>
+      <button class="imgmgr-dir-btn imgmgr-dir-btn-del" onclick="stopProp(event);imgMgrStartDeleteFolder('${safePath}','${safeName}',this)" title="刪除資料夾">🗑</button>
+    </div>
+  </div>`;
+}
+
+// ── 載入（API → 更新快取 → render）──────────────────────────
 
 async function imgMgrLoad(folder) {
   _imgMgr.folder = folder || IMG_ROOT;
@@ -1709,165 +1819,149 @@ async function imgMgrLoad(folder) {
   loading.style.display = 'block';
   empty.style.display   = 'none';
   grid.style.display    = 'none';
-  grid.innerHTML        = '';
 
   const token = getCfg().githubToken;
-  if (!token) {
-    loading.textContent = '⚠️ 請先在設定頁填入 GitHub Token';
-    return;
-  }
+  if (!token) { loading.textContent = '⚠️ 請先在設定頁填入 GitHub Token'; return; }
+  loading.textContent = '載入中…';
 
   try {
     const items = await _githubRequest(token, _imgMgr.folder);
-    loading.style.display = 'none';
-
-    if (!items || !items.length) { empty.style.display = 'block'; return; }
-
-    const dirs = items.filter(i => i.type === 'dir');
-    const imgs = items.filter(i => i.type === 'file' && /\.(png|jpg|jpeg|gif|webp)$/i.test(i.name));
-    const others = items.filter(i => i.type === 'file' && !/\.(png|jpg|jpeg|gif|webp)$/i.test(i.name));
-
-    if (!dirs.length && !imgs.length) { empty.style.display = 'block'; return; }
-
-    grid.style.display = 'block';
-
-    // 資料夾區
-    let html = '';
-    if (dirs.length) {
-      html += `<div class="imgmgr-section-label">資料夾</div>`;
-      html += `<div class="imgmgr-dir-row">`;
-      dirs.forEach(d => {
-        const safeDirPath = escHtml(d.path);
-        const safeDirName = escHtml(d.name);
-        html += `<div class="imgmgr-dir-item">
-          <span class="imgmgr-dir-icon" onclick="imgMgrGoTo('${safeDirPath}')">📁</span>
-          <span class="imgmgr-dir-name" title="${safeDirName}" onclick="imgMgrGoTo('${safeDirPath}')">${safeDirName}</span>
-          <div class="imgmgr-dir-actions">
-            <button class="imgmgr-dir-btn" onclick="stopProp(event);imgMgrRenameFolder('${safeDirPath}','${safeDirName}')" title="重命名">✏️</button>
-            <button class="imgmgr-dir-btn imgmgr-dir-btn-del" onclick="stopProp(event);imgMgrDeleteFolder('${safeDirPath}','${safeDirName}')" title="刪除資料夾">🗑</button>
-          </div>
-        </div>`;
-      });
-      html += `</div>`;
-    }
-
-    // 圖片區
-    if (imgs.length) {
-      html += `<div class="imgmgr-section-label">圖片（${imgs.length}）</div>`;
-      html += `<div class="imgmgr-img-grid">`;
-      imgs.forEach(img => {
-        const rawUrl  = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${img.path}`;
-        const safeUrl = escHtml(rawUrl);
-        const safeName = escHtml(img.name);
-        const safePath = escHtml(img.path);
-        // 檢查此圖是否被公告使用
-        const usedBy = _imgMgrFindUsage(rawUrl);
-        const usedBadge = usedBy.length
-          ? `<div class="imgmgr-used-badge" title="${usedBy.join('\n')}">使用中 ${usedBy.length}</div>`
-          : '';
-        html += `
-<div class="imgmgr-img-card">
-  <div class="imgmgr-img-wrap">
-    <img src="${safeUrl}" loading="lazy" onclick="window.open('${safeUrl}','_blank')">
-    ${usedBadge}
-  </div>
-  <div class="imgmgr-img-name" title="${safeName}">${safeName}</div>
-  <div class="imgmgr-img-actions">
-    <button class="btn btn-outline btn-sm imgmgr-del-btn" onclick="imgMgrDelete('${safePath}','${safeUrl}','${safeName}')">🗑 刪除</button>
-  </div>
-</div>`;
-      });
-      html += `</div>`;
-    }
-
-    grid.innerHTML = html;
+    _imgMgr.cache[_imgMgr.folder] = _imgMgrParseItems(items || []);
+    _imgMgrRender();
   } catch(e) {
     loading.style.display = 'block';
-    loading.textContent = '載入失敗：' + e.message;
+    loading.textContent   = '載入失敗：' + e.message;
     console.warn('imgMgr load failed', e);
     toast('⚠️ 圖片管理載入失敗：' + e.message);
   }
 }
 
-// 找出 _imgCache 中使用此 URL 的公告 key 列表
-function _imgMgrFindUsage(rawUrl) {
-  const used = [];
-  const normalised = rawUrl.split('?')[0].toLowerCase();
-  Object.entries(_imgCache).forEach(([key, val]) => {
-    if (typeof val === 'string') {
-      if (val.split('?')[0].toLowerCase() === normalised) used.push(key);
-    } else if (val && typeof val === 'object') {
-      const match = Object.values(val).some(u => u && u.split('?')[0].toLowerCase() === normalised);
-      if (match) used.push(key);
-    }
-  });
-  return used;
-}
-
-function imgMgrGoTo(folder) {
-  imgMgrLoad(folder);
-}
-
-function imgMgrRefresh() {
-  imgMgrLoad(_imgMgr.folder);
-}
-
-// ── 上傳 ──────────────────────────────────────────────────────
-
-function imgMgrOnFileSelect(input) {
-  const file = input.files[0];
-  if (!file) return;
-  _imgMgr.fileObj = file;
-
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('imgmgr-preview-img').src = e.target.result;
+function _imgMgrParseItems(items) {
+  return {
+    dirs: items.filter(i => i.type === 'dir').map(i => ({ path: i.path, name: i.name })),
+    imgs: items.filter(i => i.type === 'file' && /\.(png|jpg|jpeg|gif|webp)$/i.test(i.name))
+               .map(i => ({ path: i.path, name: i.name, sha: i.sha })),
   };
-  reader.readAsDataURL(file);
+}
 
-  document.getElementById('imgmgr-filename-input').value = file.name;
-  document.getElementById('imgmgr-upload-preview').style.display = 'flex';
-  document.getElementById('imgmgr-upload-status').textContent = '';
-  // reset file input so same file can be re-selected
+function imgMgrGoTo(folder) { imgMgrLoad(folder); }
+function imgMgrRefresh()    { delete _imgMgr.cache[_imgMgr.folder]; imgMgrLoad(_imgMgr.folder); }
+
+// ── 找出 _imgCache 中使用此 URL 的公告 ──────────────────────
+
+function _imgMgrFindUsage(rawUrl) {
+  const norm = rawUrl.split('?')[0].toLowerCase();
+  return Object.entries(_imgCache)
+    .filter(([, val]) => {
+      if (typeof val === 'string') return val.split('?')[0].toLowerCase() === norm;
+      return val && typeof val === 'object' &&
+        Object.values(val).some(u => u && u.split('?')[0].toLowerCase() === norm);
+    })
+    .map(([key]) => key);
+}
+
+// ══ 上傳 Modal ════════════════════════════════════════════════
+
+function imgMgrOpenUpload() {
+  _imgMgrModalReset();
+  document.getElementById('modal-imgmgr-upload').classList.add('open');
+  _imgMgrModalPopulateFolders();
+}
+
+function imgMgrCloseUpload() {
+  document.getElementById('modal-imgmgr-upload').classList.remove('open');
+  _imgMgrModalReset();
+}
+
+function _imgMgrModalReset() {
+  document.getElementById('imgmgr-modal-preview-wrap').style.display = 'none';
+  document.getElementById('imgmgr-modal-upload-btn').style.display   = 'none';
+  document.getElementById('imgmgr-modal-status').textContent         = '';
+  document.getElementById('imgmgr-modal-dropzone').classList.remove('drag-over');
+  document.getElementById('imgmgr-modal-file-input').value           = '';
+  delete _imgMgr.pendingFile;
+  delete _imgMgr.pendingBase64;
+}
+
+// 收集快取中已知的資料夾路徑，填入目標資料夾下拉
+function _imgMgrModalPopulateFolders() {
+  const sel = document.getElementById('imgmgr-modal-folder');
+  // 從快取收集已知資料夾
+  const known = new Set([IMG_ROOT]);
+  Object.keys(_imgMgr.cache).forEach(k => {
+    known.add(k);
+    (_imgMgr.cache[k].dirs || []).forEach(d => known.add(d.path));
+  });
+  const sorted = [...known].sort();
+  sel.innerHTML = sorted.map(p =>
+    `<option value="${escHtml(p)}" ${p === _imgMgr.folder ? 'selected' : ''}>${escHtml(p)}</option>`
+  ).join('');
+}
+
+function imgMgrModalDragOver(e)  { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function imgMgrModalDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function imgMgrModalDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) _imgMgrModalSetFile(file);
+}
+function imgMgrModalOnFileSelect(input) {
+  const file = input.files[0];
+  if (file) _imgMgrModalSetFile(file);
   input.value = '';
 }
 
-function imgMgrCancelUpload() {
-  _imgMgr.fileObj = null;
-  document.getElementById('imgmgr-upload-preview').style.display = 'none';
-  document.getElementById('imgmgr-upload-status').textContent = '';
+function _imgMgrModalSetFile(file) {
+  _imgMgr.pendingFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _imgMgr.pendingBase64 = e.target.result.split(',')[1];
+    document.getElementById('imgmgr-modal-preview-img').src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  document.getElementById('imgmgr-modal-filename').value       = file.name;
+  document.getElementById('imgmgr-modal-preview-wrap').style.display = 'flex';
+  document.getElementById('imgmgr-modal-upload-btn').style.display   = 'inline-flex';
+  document.getElementById('imgmgr-modal-status').textContent         = '';
 }
 
-async function imgMgrConfirmUpload() {
-  if (!_imgMgr.fileObj) return;
+async function imgMgrModalUpload() {
+  if (!_imgMgr.pendingFile || !_imgMgr.pendingBase64) return;
   const token = getCfg().githubToken;
   if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
 
-  const rawName = document.getElementById('imgmgr-filename-input').value.trim();
+  const rawName = document.getElementById('imgmgr-modal-filename').value.trim();
   if (!rawName) { toast('⚠️ 請輸入檔名'); return; }
+  const targetFolder = document.getElementById('imgmgr-modal-folder').value;
 
-  const btn    = document.getElementById('imgmgr-confirm-upload-btn');
-  const status = document.getElementById('imgmgr-upload-status');
+  const btn    = document.getElementById('imgmgr-modal-upload-btn');
+  const status = document.getElementById('imgmgr-modal-status');
   btn.disabled = true;
-  status.textContent = '上傳中…';
+  status.textContent = '⏳ 上傳中…';
 
   try {
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = e => resolve(e.target.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(_imgMgr.fileObj);
-    });
+    const path = _imgMgrPath(targetFolder, rawName);
+    const url  = await _githubPut(token, path, _imgMgr.pendingBase64);
 
-    const path = _imgMgrPath(_imgMgr.folder, rawName);
-    await _githubPut(token, path, base64);
+    // 樂觀更新：把新圖片加入快取
+    if (!_imgMgr.cache[targetFolder]) _imgMgr.cache[targetFolder] = { dirs: [], imgs: [] };
+    const existing = _imgMgr.cache[targetFolder].imgs.findIndex(i => i.name === rawName);
+    const newEntry = { path, name: rawName, sha: null };
+    if (existing >= 0) _imgMgr.cache[targetFolder].imgs[existing] = newEntry;
+    else _imgMgr.cache[targetFolder].imgs.push(newEntry);
+
+    // 如果目前在那個資料夾，直接重新 render
+    if (_imgMgr.folder === targetFolder) _imgMgrRender();
 
     status.textContent = '✅ 上傳成功！';
     toast(`✅ 已上傳 ${rawName}`);
+
+    // 清空等待下一張（不關 modal）
     setTimeout(() => {
-      imgMgrCancelUpload();
-      imgMgrRefresh();
-    }, 800);
+      _imgMgrModalReset();
+      _imgMgrModalPopulateFolders();
+    }, 1000);
   } catch(e) {
     status.textContent = '❌ 上傳失敗：' + e.message;
     toast('❌ 上傳失敗：' + e.message);
@@ -1876,160 +1970,316 @@ async function imgMgrConfirmUpload() {
   }
 }
 
-// ── 刪除 ──────────────────────────────────────────────────────
+// ── 拖放到主頁面（不開 modal，直接上傳到目前資料夾）────────
 
-async function imgMgrDelete(path, rawUrl, name) {
-  const usedBy = _imgMgrFindUsage(rawUrl);
-  let confirmMsg = `確定要刪除「${name}」嗎？此操作無法復原。`;
-  if (usedBy.length) {
-    confirmMsg = `⚠️ 此圖片目前被 ${usedBy.length} 篇公告使用：\n${usedBy.join('\n')}\n\n確定仍要刪除嗎？`;
+function imgMgrOnDragOver(e) {
+  e.preventDefault();
+  document.getElementById('imgmgr-dropzone').style.display = 'flex';
+}
+function imgMgrOnDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget))
+    document.getElementById('imgmgr-dropzone').style.display = 'none';
+}
+function imgMgrOnDrop(e) {
+  e.preventDefault();
+  document.getElementById('imgmgr-dropzone').style.display = 'none';
+  const files = [...e.dataTransfer.files].filter(f => /^image\//i.test(f.type));
+  if (!files.length) return;
+  // 多檔：開 modal 並預填第一張，其餘待使用者逐一確認
+  if (files.length === 1) {
+    imgMgrOpenUpload();
+    _imgMgrModalSetFile(files[0]);
+  } else {
+    imgMgrOpenUpload();
+    _imgMgrModalSetFile(files[0]);
+    toast(`提示：拖入了 ${files.length} 個檔案，請逐一確認上傳`);
   }
-  if (!confirm(confirmMsg)) return;
+}
 
+// ══ 刪除圖片（inline 確認）═══════════════════════════════════
+
+async function imgMgrDeleteImg(path, rawUrl, name, btn) {
+  // 展開 inline 確認列
+  const card = btn.closest('.imgmgr-img-card');
+  if (card.querySelector('.imgmgr-inline-confirm')) return; // 已展開
+
+  const usedBy = _imgMgrFindUsage(rawUrl);
+  const warn   = usedBy.length
+    ? `<span class="imgmgr-inline-warn">⚠️ 此圖被 ${usedBy.length} 篇公告使用</span>` : '';
+
+  const confirm_html = `<div class="imgmgr-inline-confirm">
+    ${warn}
+    <span class="imgmgr-inline-confirm-text">確定刪除？</span>
+    <button class="imgmgr-inline-yes" onclick="imgMgrDeleteImgConfirm('${escHtml(path)}','${escHtml(rawUrl)}','${escHtml(name)}',this)">刪除</button>
+    <button class="imgmgr-inline-no" onclick="this.closest('.imgmgr-inline-confirm').remove()">取消</button>
+  </div>`;
+  card.insertAdjacentHTML('beforeend', confirm_html);
+}
+
+async function imgMgrDeleteImgConfirm(path, rawUrl, name, btn) {
   const token = getCfg().githubToken;
   if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '…';
 
   try {
     const sha = await _githubGetSha(token, path);
     if (!sha) throw new Error('找不到檔案 SHA');
-    await _githubRequest(token, path, 'DELETE', {
-      message: `Delete ${path}`,
-      sha,
-      branch: GITHUB_BRANCH,
-    });
+    await _githubRequest(token, path, 'DELETE', { message: `Delete ${path}`, sha, branch: GITHUB_BRANCH });
+
+    // 樂觀更新：從快取移除
+    const folder = _imgMgr.folder;
+    if (_imgMgr.cache[folder]) {
+      _imgMgr.cache[folder].imgs = _imgMgr.cache[folder].imgs.filter(i => i.path !== path);
+      _imgMgrRender();
+    }
     toast(`🗑 已刪除 ${name}`);
-    imgMgrRefresh();
   } catch(e) {
     toast('❌ 刪除失敗：' + e.message);
-    console.warn('imgMgr delete failed', e);
+    btn.closest('.imgmgr-inline-confirm').remove();
+    btn.disabled = false;
   }
 }
 
+// ══ 資料夾：新建（inline 輸入）════════════════════════════════
 
-// ── 重命名資料夾 ──────────────────────────────────────────────
+function imgMgrNewFolder() {
+  const dirRow = document.getElementById('imgmgr-dir-row');
+  // 確保資料夾區存在
+  const grid = document.getElementById('imgmgr-grid');
 
-async function imgMgrRenameFolder(folderPath, oldName) {
-  const newName = prompt('輸入新資料夾名稱：', oldName);
-  if (!newName || !newName.trim() || newName.trim() === oldName) return;
-  const cleanName = newName.trim().replace(/[/\\]/g, '');
-  if (!cleanName) { toast('⚠️ 名稱無效'); return; }
+  // 如果已有 inline input，focus 它就好
+  const existing = document.getElementById('imgmgr-new-folder-input');
+  if (existing) { existing.focus(); return; }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'imgmgr-dir-item imgmgr-dir-new';
+  wrap.innerHTML = `<span class="imgmgr-dir-icon">📁</span>
+    <input id="imgmgr-new-folder-input" class="imgmgr-inline-input" placeholder="資料夾名稱"
+      onkeydown="imgMgrNewFolderKeydown(event)" autofocus>
+    <button class="imgmgr-dir-btn" onclick="imgMgrNewFolderCommit()" title="確認">✓</button>
+    <button class="imgmgr-dir-btn" onclick="imgMgrNewFolderCancel()" title="取消">✗</button>`;
+
+  if (dirRow) {
+    dirRow.prepend(wrap);
+  } else {
+    // 資料夾區不存在，插在 grid 最前面
+    const label = document.createElement('div');
+    label.className = 'imgmgr-section-label';
+    label.textContent = '資料夾';
+    const row = document.createElement('div');
+    row.id = 'imgmgr-dir-row';
+    row.className = 'imgmgr-dir-row';
+    row.prepend(wrap);
+    grid.style.display = 'block';
+    document.getElementById('imgmgr-empty').style.display = 'none';
+    grid.prepend(row);
+    grid.prepend(label);
+  }
+  document.getElementById('imgmgr-new-folder-input').focus();
+}
+
+function imgMgrNewFolderKeydown(e) {
+  if (e.key === 'Enter') { e.preventDefault(); imgMgrNewFolderCommit(); }
+  if (e.key === 'Escape') imgMgrNewFolderCancel();
+}
+
+function imgMgrNewFolderCancel() {
+  document.querySelector('.imgmgr-dir-new')?.remove();
+}
+
+async function imgMgrNewFolderCommit() {
+  const input = document.getElementById('imgmgr-new-folder-input');
+  if (!input) return;
+  const name = input.value.trim().replace(/[/\\]/g, '');
+  if (!name) { input.focus(); return; }
 
   const token = getCfg().githubToken;
   if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
 
-  const parentPath = folderPath.split('/').slice(0, -1).join('/');
-  const newPath    = _imgMgrPath(parentPath, cleanName);
+  input.disabled = true;
 
+  try {
+    const path = _imgMgrPath(_imgMgr.folder, name, '.gitkeep');
+    await _githubPut(token, path, btoa(''));
+
+    // 樂觀更新：加入快取
+    const folder = _imgMgr.folder;
+    if (!_imgMgr.cache[folder]) _imgMgr.cache[folder] = { dirs: [], imgs: [] };
+    const dirPath = _imgMgrPath(folder, name);
+    if (!_imgMgr.cache[folder].dirs.find(d => d.name === name)) {
+      _imgMgr.cache[folder].dirs.push({ path: dirPath, name });
+    }
+    _imgMgr.cache[dirPath] = { dirs: [], imgs: [] };
+
+    toast(`✅ 資料夾「${name}」已建立`);
+    _imgMgrRender();
+  } catch(e) {
+    toast('❌ 建立失敗：' + e.message);
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+// ══ 資料夾：重命名（inline 編輯）════════════════════════════
+
+function imgMgrStartRenameFolder(folderPath, oldName) {
+  const el = document.getElementById('imgdir-' + folderPath.replace(/\//g, '-'));
+  if (!el) return;
+  if (el.querySelector('.imgmgr-inline-input')) return;
+
+  const nameEl = el.querySelector('.imgmgr-dir-name');
+  nameEl.style.display = 'none';
+
+  const input = document.createElement('input');
+  input.className = 'imgmgr-inline-input';
+  input.value     = oldName;
+  input.onkeydown = e => {
+    if (e.key === 'Enter')  { e.preventDefault(); imgMgrRenameCommit(folderPath, oldName, input); }
+    if (e.key === 'Escape') { nameEl.style.display = ''; input.remove(); }
+  };
+  nameEl.insertAdjacentElement('afterend', input);
+  input.focus();
+  input.select();
+
+  // 重命名確認按鈕
+  const actions = el.querySelector('.imgmgr-dir-actions');
+  actions.innerHTML = `
+    <button class="imgmgr-dir-btn" onclick="imgMgrRenameCommit('${escHtml(folderPath)}','${escHtml(oldName)}',this.closest('.imgmgr-dir-item').querySelector('.imgmgr-inline-input'))" title="確認">✓</button>
+    <button class="imgmgr-dir-btn" onclick="imgMgrRenameCancelEl(this,'${escHtml(oldName)}')" title="取消">✗</button>`;
+}
+
+function imgMgrRenameCancelEl(btn, oldName) {
+  const el = btn.closest('.imgmgr-dir-item');
+  el.querySelector('.imgmgr-inline-input')?.remove();
+  const nameEl = el.querySelector('.imgmgr-dir-name');
+  nameEl.style.display = '';
+  // restore actions
+  const folderPath = el.id.replace('imgdir-', '').replace(/-/g, '/');
+  el.querySelector('.imgmgr-dir-actions').innerHTML = `
+    <button class="imgmgr-dir-btn" onclick="stopProp(event);imgMgrStartRenameFolder('${escHtml(folderPath)}','${escHtml(oldName)}')" title="重命名">✏️</button>
+    <button class="imgmgr-dir-btn imgmgr-dir-btn-del" onclick="stopProp(event);imgMgrStartDeleteFolder('${escHtml(folderPath)}','${escHtml(oldName)}',this)" title="刪除資料夾">🗑</button>`;
+}
+
+async function imgMgrRenameCommit(folderPath, oldName, inputEl) {
+  const newName = (inputEl?.value || '').trim().replace(/[/\\]/g, '');
+  if (!newName || newName === oldName) {
+    imgMgrRenameCancelEl(inputEl, oldName);
+    return;
+  }
+
+  const token = getCfg().githubToken;
+  if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
+
+  if (inputEl) inputEl.disabled = true;
   toast('⏳ 重命名中，請稍候…');
 
   try {
-    // 1. 列出資料夾內所有檔案
+    const parentPath = folderPath.split('/').slice(0, -1).join('/');
+    const newPath    = _imgMgrPath(parentPath, newName);
+
     const files = await _imgMgrListAllFiles(token, folderPath);
     if (!files.length) {
-      // 空資料夾（只有 .gitkeep 或真的空）直接建新的再刪舊的
       await _githubPut(token, _imgMgrPath(newPath, '.gitkeep'), btoa(''));
-      await _imgMgrDeleteAllFiles(token, [{ path: _imgMgrPath(folderPath, '.gitkeep') }]);
+      const oldKeep = _imgMgrPath(folderPath, '.gitkeep');
+      const sha = await _githubGetSha(token, oldKeep);
+      if (sha) await _githubRequest(token, oldKeep, 'DELETE', { message: `Delete ${oldKeep}`, sha, branch: GITHUB_BRANCH });
     } else {
-      // 2. 在新路徑重建每個檔案
       for (const file of files) {
         const relPath  = file.path.slice(folderPath.length + 1);
         const destPath = _imgMgrPath(newPath, relPath);
-        // 下載原始內容
         const fileData = await _githubRequest(token, file.path);
         if (!fileData) continue;
         await _githubPut(token, destPath, fileData.content.replace(/\n/g, ''));
       }
-      // 3. 刪除舊資料夾內所有檔案
       await _imgMgrDeleteAllFiles(token, files);
     }
-    toast(`✅ 資料夾已重命名為「${cleanName}」`);
-    setTimeout(() => imgMgrRefresh(), 800);
+
+    // 樂觀更新：替換快取中的資料夾名
+    const parent = _imgMgr.cache[_imgMgr.folder];
+    if (parent) {
+      const idx = parent.dirs.findIndex(d => d.path === folderPath);
+      if (idx >= 0) parent.dirs[idx] = { path: newPath, name: newName };
+    }
+    if (_imgMgr.cache[folderPath]) {
+      _imgMgr.cache[newPath] = _imgMgr.cache[folderPath];
+      delete _imgMgr.cache[folderPath];
+    }
+
+    toast(`✅ 資料夾已重命名為「${newName}」`);
+    _imgMgrRender();
   } catch(e) {
     toast('❌ 重命名失敗：' + e.message);
     console.warn('imgMgr rename folder failed', e);
+    if (inputEl) inputEl.disabled = false;
   }
 }
 
-// ── 刪除資料夾（遞迴刪所有子檔案）────────────────────────────
+// ══ 資料夾：刪除（inline 確認）════════════════════════════════
 
-async function imgMgrDeleteFolder(folderPath, name) {
-  if (!confirm(`確定要刪除資料夾「${name}」及其所有內容嗎？此操作無法復原。`)) return;
+function imgMgrStartDeleteFolder(folderPath, name, btn) {
+  const el = document.getElementById('imgdir-' + folderPath.replace(/\//g, '-'));
+  if (!el) return;
+  if (el.querySelector('.imgmgr-inline-confirm')) return;
 
+  el.insertAdjacentHTML('beforeend', `<div class="imgmgr-inline-confirm">
+    <span class="imgmgr-inline-confirm-text">刪除「${escHtml(name)}」及所有內容？</span>
+    <button class="imgmgr-inline-yes" onclick="imgMgrDeleteFolderConfirm('${escHtml(folderPath)}','${escHtml(name)}',this)">刪除</button>
+    <button class="imgmgr-inline-no" onclick="this.closest('.imgmgr-inline-confirm').remove()">取消</button>
+  </div>`);
+}
+
+async function imgMgrDeleteFolderConfirm(folderPath, name, btn) {
   const token = getCfg().githubToken;
   if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
 
+  btn.disabled = true;
+  btn.textContent = '…';
   toast('⏳ 刪除中，請稍候…');
 
   try {
     const files = await _imgMgrListAllFiles(token, folderPath);
     if (!files.length) {
-      // 嘗試刪 .gitkeep
       const gitkeepPath = _imgMgrPath(folderPath, '.gitkeep');
       const sha = await _githubGetSha(token, gitkeepPath);
-      if (sha) {
-        await _githubRequest(token, gitkeepPath, 'DELETE', { message: `Delete ${gitkeepPath}`, sha, branch: GITHUB_BRANCH });
-      }
+      if (sha) await _githubRequest(token, gitkeepPath, 'DELETE', { message: `Delete ${gitkeepPath}`, sha, branch: GITHUB_BRANCH });
     } else {
       await _imgMgrDeleteAllFiles(token, files);
     }
+
+    // 樂觀更新
+    const parent = _imgMgr.cache[_imgMgr.folder];
+    if (parent) parent.dirs = parent.dirs.filter(d => d.path !== folderPath);
+    delete _imgMgr.cache[folderPath];
+
     toast(`🗑 資料夾「${name}」已刪除`);
-    setTimeout(() => imgMgrRefresh(), 800);
+    _imgMgrRender();
   } catch(e) {
     toast('❌ 刪除失敗：' + e.message);
     console.warn('imgMgr delete folder failed', e);
+    btn.closest('.imgmgr-inline-confirm')?.remove();
   }
 }
 
-// ── 遞迴列出資料夾下所有檔案（含子資料夾）───────────────────
+// ── 遞迴列出 / 批次刪除 ──────────────────────────────────────
 
 async function _imgMgrListAllFiles(token, folderPath) {
   const result = [];
-  const items = await _githubRequest(token, folderPath);
+  const items  = await _githubRequest(token, folderPath);
   if (!items) return result;
   for (const item of items) {
-    if (item.type === 'file') {
-      result.push({ path: item.path, sha: item.sha });
-    } else if (item.type === 'dir') {
-      const sub = await _imgMgrListAllFiles(token, item.path);
-      result.push(...sub);
-    }
+    if (item.type === 'file') result.push({ path: item.path, sha: item.sha });
+    else if (item.type === 'dir') result.push(...await _imgMgrListAllFiles(token, item.path));
   }
   return result;
 }
-
-// ── 批次刪除檔案列表 ─────────────────────────────────────────
 
 async function _imgMgrDeleteAllFiles(token, files) {
   for (const file of files) {
     const sha = file.sha || await _githubGetSha(token, file.path);
     if (!sha) continue;
-    await _githubRequest(token, file.path, 'DELETE', {
-      message: `Delete ${file.path}`,
-      sha,
-      branch: GITHUB_BRANCH,
-    });
-  }
-}
-
-// ── 新增資料夾 ────────────────────────────────────────────────
-
-async function imgMgrNewFolder() {
-  const name = prompt('輸入資料夾名稱：');
-  if (!name || !name.trim()) return;
-  const folderName = name.trim().replace(/[/\\]/g, '');
-  if (!folderName) { toast('⚠️ 資料夾名稱無效'); return; }
-
-  const token = getCfg().githubToken;
-  if (!token) { toast('⚠️ 請先在設定頁填入 GitHub Token'); return; }
-
-  const path = _imgMgrPath(_imgMgr.folder, folderName, '.gitkeep');
-  try {
-    await _githubPut(token, path, btoa(''));
-    toast(`✅ 資料夾「${folderName}」已建立`);
-    // GitHub API 寫入後稍等再 refresh，避免讀到舊快取
-    setTimeout(() => imgMgrRefresh(), 800);
-  } catch(e) {
-    toast('❌ 建立失敗：' + e.message);
+    await _githubRequest(token, file.path, 'DELETE', { message: `Delete ${file.path}`, sha, branch: GITHUB_BRANCH });
   }
 }
 
@@ -2055,8 +2305,13 @@ Object.assign(window, {
   buildErolabsDocs, onErolabsMaintChange, closeErolabsModal, confirmBuildErolabs,
   openImgLibrary, _imgLibLoadFolder, switchImgLangTab, selectImgFromLibrary, closeImgLibrary,
   deleteSchedule, clearAnnImg, uploadImgCache,
-  imgMgrGoTo, imgMgrRefresh, imgMgrOnFileSelect, imgMgrCancelUpload, imgMgrConfirmUpload, imgMgrDelete, imgMgrNewFolder,
-  imgMgrRenameFolder, imgMgrDeleteFolder,
+  imgMgrGoTo, imgMgrRefresh, imgMgrOpenUpload, imgMgrCloseUpload,
+  imgMgrModalDragOver, imgMgrModalDragLeave, imgMgrModalDrop, imgMgrModalOnFileSelect, imgMgrModalUpload,
+  imgMgrOnDragOver, imgMgrOnDragLeave, imgMgrOnDrop,
+  imgMgrDeleteImg, imgMgrDeleteImgConfirm,
+  imgMgrNewFolder, imgMgrNewFolderKeydown, imgMgrNewFolderCommit, imgMgrNewFolderCancel,
+  imgMgrStartRenameFolder, imgMgrRenameCancelEl, imgMgrRenameCommit,
+  imgMgrStartDeleteFolder, imgMgrDeleteFolderConfirm,
 });
 
 })();

@@ -547,3 +547,64 @@ body {
   color: #ef4444; border-color: #fca5a5;
 }
 .imgmgr-del-btn:hover { background: #fef2f2; opacity: 1; }
+
+/* ── 圖片管理：拖放提示覆蓋層 ── */
+.imgmgr-dropzone {
+  position: absolute; inset: 0; z-index: 10;
+  background: rgba(99,102,241,0.12);
+  border: 3px dashed #6366f1; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; font-weight: 700; color: #6366f1;
+  pointer-events: none;
+}
+#imgmgr-grid { position: relative; }
+
+/* ── 上傳 Modal ── */
+.imgmgr-modal-dropzone {
+  border: 2px dashed var(--border); border-radius: 12px;
+  padding: 32px 20px; text-align: center; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s; margin-bottom: 16px;
+}
+.imgmgr-modal-dropzone:hover,
+.imgmgr-modal-dropzone.drag-over {
+  background: #f5f3ff; border-color: #6366f1;
+}
+.imgmgr-modal-drop-icon { font-size: 2rem; margin-bottom: 8px; }
+.imgmgr-modal-drop-text { font-size: 0.95rem; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.imgmgr-modal-drop-hint { font-size: 0.78rem; color: var(--text-sub); }
+
+.imgmgr-modal-preview-row {
+  display: flex; gap: 16px; align-items: flex-start; margin-bottom: 4px;
+}
+.imgmgr-modal-preview-img {
+  width: 90px; height: 90px; object-fit: cover;
+  border-radius: 8px; flex-shrink: 0; border: 1px solid var(--border);
+}
+.imgmgr-modal-preview-info { flex: 1; min-width: 0; }
+
+/* ── Inline 操作共用 ── */
+.imgmgr-inline-input {
+  flex: 1; border: 1px solid #6366f1; border-radius: 6px;
+  padding: 3px 8px; font-size: 0.83rem; outline: none;
+  min-width: 0; background: white;
+}
+.imgmgr-inline-confirm {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  background: #fef2f2; border: 1px solid #fca5a5;
+  border-radius: 6px; padding: 5px 8px; margin-top: 4px;
+  font-size: 0.78rem;
+}
+.imgmgr-inline-confirm-text { color: #374151; flex: 1; }
+.imgmgr-inline-warn { color: #d97706; font-weight: 600; font-size: 0.75rem; width: 100%; }
+.imgmgr-inline-yes {
+  background: #ef4444; color: white; border: none;
+  border-radius: 5px; padding: 3px 10px; cursor: pointer; font-size: 0.78rem; font-weight: 600;
+}
+.imgmgr-inline-yes:hover { background: #dc2626; }
+.imgmgr-inline-no {
+  background: white; color: #374151; border: 1px solid var(--border);
+  border-radius: 5px; padding: 3px 10px; cursor: pointer; font-size: 0.78rem;
+}
+
+/* ── 資料夾 inline 新建 ── */
+.imgmgr-dir-new { border-color: #6366f1; background: #f5f3ff; }
