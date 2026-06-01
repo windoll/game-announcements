@@ -181,6 +181,28 @@
         <div class="cfg-hint-top">用於上傳圖片到 GitHub repo（windoll/game-announcements）</div>
       </div>
 
+      <!-- Google OAuth -->
+      <div class="card card-no-top">
+        <div class="cfg-section-title">🔑 Google 帳號授權（寫入試算表）</div>
+        <div id="gauth-status" class="gauth-status gauth-unsigned">尚未登入</div>
+        <div class="cfg-hint" style="margin-bottom:14px;">用於將圖片 URL 寫回 Google Sheet，授權後 token 儲存於此瀏覽器</div>
+
+        <div class="field-label">OAuth Client ID</div>
+        <input type="text" id="cfg-oauth-client-id" placeholder="xxxx.apps.googleusercontent.com"
+               class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
+
+        <div class="field-label">OAuth Client Secret</div>
+        <input type="password" id="cfg-oauth-client-secret" placeholder="GOCSPX-xxxx"
+               class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+          <button class="btn btn-primary btn-sm" onclick="gauthStart()">🔑 登入 Google</button>
+          <button class="btn btn-outline btn-sm" onclick="gauthInputCode()">📋 貼上授權碼</button>
+          <button class="btn btn-outline btn-sm" id="gauth-signout-btn" onclick="gauthSignOut()" style="display:none;">登出</button>
+        </div>
+        <div id="gauth-hint" class="gauth-hint" style="display:none;"></div>
+      </div>
+
       <!-- 測試模式開關 -->
       <div class="card card-no-top">
         <div class="cfg-row-between">
@@ -336,6 +358,8 @@ const DEFAULTS = {
   testAnnouncementTypes: [],
   testMode: false,
   githubToken: '',
+  oauthClientId: '',
+  oauthClientSecret: '',
 };
 
 const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
@@ -1155,7 +1179,10 @@ function loadSettings() {
   document.getElementById('cfg-project-name').value = cfg.projectName || '';
   document.getElementById('cfg-sheet-id').value     = cfg.sheetId     || '';
   document.getElementById('cfg-sheet-gid').value    = cfg.sheetGid    || '';
-  document.getElementById('cfg-github-token').value = cfg.githubToken || '';
+  document.getElementById('cfg-github-token').value        = cfg.githubToken        || '';
+  document.getElementById('cfg-oauth-client-id').value     = cfg.oauthClientId     || '';
+  document.getElementById('cfg-oauth-client-secret').value  = cfg.oauthClientSecret  || '';
+  gauthRenderStatus();
   const pn = document.querySelector('.sidebar .project-name');
   if (pn && cfg.projectName) pn.textContent = cfg.projectName;
   renderAnnouncementTypes(cfg.announcementTypes     || [], 'prod');
@@ -1339,7 +1366,9 @@ function saveSettings() {
     projectName: document.getElementById('cfg-project-name').value.trim(),
     sheetId:     document.getElementById('cfg-sheet-id').value.trim(),
     sheetGid:    document.getElementById('cfg-sheet-gid').value.trim(),
-    githubToken: document.getElementById('cfg-github-token').value.trim(),
+    githubToken:       document.getElementById('cfg-github-token').value.trim(),
+    oauthClientId:     document.getElementById('cfg-oauth-client-id').value.trim(),
+    oauthClientSecret: document.getElementById('cfg-oauth-client-secret').value.trim(),
   });
   cfgStore.save(updated);
   const pnEl = document.querySelector('.sidebar .project-name');
@@ -2439,6 +2468,189 @@ async function _imgMgrDeleteAllFiles(token, files) {
   }
 }
 
+
+// ══ MODULE: GOOGLE OAUTH ═════════════════════════════════════
+
+const GAUTH_SCOPE       = 'https://www.googleapis.com/auth/spreadsheets';
+const GAUTH_LS_KEY      = 'gauth-tokens'; // { access_token, refresh_token, expiry }
+const GAUTH_REDIRECT    = 'http://localhost';
+
+function _gauthTokens() {
+  try { return JSON.parse(localStorage.getItem(GAUTH_LS_KEY) || 'null'); } catch { return null; }
+}
+function _gauthSaveTokens(t) { localStorage.setItem(GAUTH_LS_KEY, JSON.stringify(t)); }
+function _gauthClearTokens() { localStorage.removeItem(GAUTH_LS_KEY); }
+
+function gauthRenderStatus() {
+  const el      = document.getElementById('gauth-status');
+  const signout = document.getElementById('gauth-signout-btn');
+  if (!el) return;
+  const t = _gauthTokens();
+  if (t && t.access_token) {
+    el.textContent = '✅ 已登入（token 已儲存）';
+    el.className   = 'gauth-status gauth-signed';
+    if (signout) signout.style.display = '';
+  } else {
+    el.textContent = '尚未登入';
+    el.className   = 'gauth-status gauth-unsigned';
+    if (signout) signout.style.display = 'none';
+  }
+}
+
+function gauthStart() {
+  const cfg = getCfg();
+  if (!cfg.oauthClientId) { toast('⚠️ 請先填入 OAuth Client ID'); return; }
+
+  const params = new URLSearchParams({
+    client_id:     cfg.oauthClientId,
+    redirect_uri:  GAUTH_REDIRECT,
+    response_type: 'code',
+    scope:         GAUTH_SCOPE,
+    access_type:   'offline',
+    prompt:        'consent',
+  });
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+  window.open(url, '_blank');
+
+  // 顯示提示
+  const hint = document.getElementById('gauth-hint');
+  if (hint) {
+    hint.style.display = 'block';
+    hint.innerHTML = `
+      <div class="gauth-hint-text">
+        1. 在新開的視窗完成 Google 授權<br>
+        2. 授權後瀏覽器會跳到「無法連線」的頁面，這是正常的<br>
+        3. 複製網址列中 <code>code=</code> 後面的內容（到 <code>&</code> 前為止）<br>
+        4. 點「貼上授權碼」貼入
+      </div>`;
+  }
+}
+
+async function gauthInputCode() {
+  const cfg = getCfg();
+  if (!cfg.oauthClientId || !cfg.oauthClientSecret) {
+    toast('⚠️ 請先填入 OAuth Client ID 和 Client Secret');
+    return;
+  }
+  const code = prompt('請貼上授權碼（網址列 code= 後的內容）：');
+  if (!code || !code.trim()) return;
+
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code:          code.trim(),
+        client_id:     cfg.oauthClientId,
+        client_secret: cfg.oauthClientSecret,
+        redirect_uri:  GAUTH_REDIRECT,
+        grant_type:    'authorization_code',
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.access_token) throw new Error(data.error_description || data.error || '授權失敗');
+
+    _gauthSaveTokens({
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token,
+      expiry:        Date.now() + (data.expires_in - 60) * 1000,
+    });
+    gauthRenderStatus();
+    const hint = document.getElementById('gauth-hint');
+    if (hint) hint.style.display = 'none';
+    toast('✅ Google 授權成功');
+  } catch(e) {
+    toast('❌ 授權失敗：' + e.message);
+    console.warn('gauth code exchange failed', e);
+  }
+}
+
+async function gauthGetAccessToken() {
+  const cfg = getCfg();
+  let tokens = _gauthTokens();
+  if (!tokens) throw new Error('尚未登入 Google，請先在設定頁完成授權');
+
+  // token 還有效
+  if (tokens.expiry && Date.now() < tokens.expiry) return tokens.access_token;
+
+  // refresh
+  if (!tokens.refresh_token) {
+    _gauthClearTokens();
+    gauthRenderStatus();
+    throw new Error('Token 已過期，請重新登入 Google');
+  }
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      refresh_token: tokens.refresh_token,
+      client_id:     cfg.oauthClientId,
+      client_secret: cfg.oauthClientSecret,
+      grant_type:    'refresh_token',
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.access_token) {
+    _gauthClearTokens();
+    gauthRenderStatus();
+    throw new Error('Token 更新失敗，請重新登入 Google');
+  }
+  tokens.access_token = data.access_token;
+  tokens.expiry       = Date.now() + (data.expires_in - 60) * 1000;
+  _gauthSaveTokens(tokens);
+  return tokens.access_token;
+}
+
+function gauthSignOut() {
+  _gauthClearTokens();
+  gauthRenderStatus();
+  toast('已登出 Google');
+}
+
+// ── 寫入 Google Sheet 圖片 URL ────────────────────────────────
+// rowIndex: 1-based（Sheet 資料列，不含 header）
+// lang: 'TW' | 'CN' | 'JP' | 'EN' | 'ALL'
+// url: 圖片 URL
+
+async function sheetsWriteImgUrl(rowIndex, lang, url) {
+  const cfg = getCfg();
+  if (!cfg.sheetId) throw new Error('請先在設定頁填入 Sheet ID');
+
+  const accessToken = await gauthGetAccessToken();
+
+  // 語系對應到欄位（G=TW, H=CN, I=JP, J=EN，依你的 Sheet 結構調整）
+  const langCol = { TW: 'G', CN: 'H', JP: 'I', EN: 'J' };
+
+  const targets = lang === 'ALL'
+    ? Object.entries(langCol).map(([l, col]) => ({ lang: l, col }))
+    : [{ lang, col: langCol[lang] }];
+
+  const data = targets.map(({ col }) => ({
+    range:  `${col}${rowIndex + 1}`, // +1 for header row
+    values: [[url]],
+  }));
+
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${cfg.sheetId}/values:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization:  `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        valueInputOption: 'RAW',
+        data,
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || res.status);
+  }
+}
+
 // ══ MODULE: INIT ═════════════════════════════════════════════════
 
 
@@ -2455,6 +2667,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 Object.assign(window, {
   stopProp, checkPassword, showPage, loadSheet, renderList, toggleCard,
+  gauthStart, gauthInputCode, gauthSignOut,
   switchListTab, reloadCurrentTab, renderPastList,
   openSendModal, renderModalLangs, closeModal, confirmSend,
   loadSettings, toggleTestMode, saveSettings, exportSettings, importSettings,

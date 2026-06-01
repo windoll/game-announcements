@@ -634,3 +634,20 @@ body {
 .list-tab:hover { color: var(--text); }
 .list-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 .list-tab-spacer { flex: 1; }
+
+/* ── Google OAuth 狀態 ── */
+.gauth-status {
+  display: inline-block; font-size: 0.83rem; font-weight: 600;
+  padding: 4px 12px; border-radius: 20px; margin-bottom: 8px;
+}
+.gauth-signed   { background: #d1fae5; color: #065f46; }
+.gauth-unsigned { background: #f3f4f6; color: #6b7280; }
+.gauth-hint {
+  margin-top: 12px; background: #f5f3ff;
+  border: 1px solid #c4b5fd; border-radius: 8px; padding: 12px 14px;
+}
+.gauth-hint-text { font-size: 0.82rem; line-height: 1.8; color: #4c1d95; }
+.gauth-hint-text code {
+  background: #ede9fe; padding: 1px 5px; border-radius: 4px;
+  font-family: monospace; font-size: 0.8rem;
+}
