@@ -499,7 +499,7 @@ function showPage(name, e) {
 // ══ MODULE: SHEET ════════════════════════════════════════════════
 
 // 動態欄位字母對應（由 _parseSheetRows 填入，供 tq 查詢和寫入使用）
-let _sheetColMap = { dateLetter: 'F', imgTW: 'H', imgCN: 'I', imgJP: 'J', imgEN: 'K' };
+let _sheetColMap = { dateLetter: 'G', imgTW: 'I', imgCN: 'J', imgJP: 'K', imgEN: 'L' };
 
 // ── 共用：解析 gviz table rows ───────────────────────────────
 
@@ -595,6 +595,7 @@ async function _resolveSheetColMap(sheetId, sheetGid) {
     if (json.table) {
       _parseSheetRows(json.table); // 副作用：更新 _sheetColMap
       _colMapResolved = true;
+      console.log('[colMap]', JSON.stringify(_sheetColMap));
     }
   } catch(e) {
     console.warn('_resolveSheetColMap 失敗，使用預設欄位字母', e);
