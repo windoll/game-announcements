@@ -340,8 +340,6 @@
 const LANGS       = ['TW', 'CN', 'JP', 'EN'];
 const LS_KEY_CFG  = 'ann-cfg';
 const LS_KEY_SCH  = 'ann-schedules';
-const LS_KEY_IMG  = 'ann-img-cache';
-const LS_KEY_IMG_TS = 'ann-img-cache-ts';
 const IMG_ROOT    = 'images';
 
 // ══ MODULE: CONFIG ══════════════════════════════════════════════
@@ -397,13 +395,6 @@ const scheduleStore = {
     all[annDate] = all[annDate].filter(r => !(r.sendDate === sendDate && r.sendTime === sendTime));
     this.save(all);
   },
-};
-
-const imgCacheStore = {
-  load() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY_IMG) || '{}'); } catch { return {}; }
-  },
-  save(cache) { localStorage.setItem(LS_KEY_IMG, JSON.stringify(cache)); },
 };
 
 // ══ MODULE: UTILS ═══════════════════════════════════════════════
@@ -610,7 +601,6 @@ async function loadSheet() {
     if (!tbl) throw new Error('回傳格式錯誤');
 
     allData = _parseSheetRows(tbl);
-    _syncImgCacheFromSheet(allData);
 
     document.getElementById('list-updated').textContent =
       `上次更新：${new Date().toLocaleString('zh-TW')}`;
@@ -656,7 +646,6 @@ async function loadPastSheet() {
     if (!tbl) throw new Error('回傳格式錯誤');
 
     pastData    = _parseSheetRows(tbl);
-    _syncImgCacheFromSheet(pastData);
     _pastLoaded = true;
     renderPastList();
   } catch(e) {
@@ -736,22 +725,6 @@ function renderPastList() {
 }
 
 
-// Sheet 圖片欄位 → _imgCache（Sheet 為主，不覆蓋空值）
-function _syncImgCacheFromSheet(rows) {
-  let changed = false;
-  rows.forEach(a => {
-    const langMap = { TW: a.imgTW, CN: a.imgCN, JP: a.imgJP, EN: a.imgEN };
-    Object.entries(langMap).forEach(([lang, url]) => {
-      if (!url) return;
-      const current = _getImgUrl(a.date, lang, a.type);
-      if (current !== url) {
-        _setImgUrl(a.date, lang, url, a.type);
-        changed = true;
-      }
-    });
-  });
-  if (changed) _saveImgCache();
-}
 
 // ══ MODULE: DATE UTILS ═══════════════════════════════════════════
 
@@ -1669,39 +1642,13 @@ async function _githubGetSha(token, path) {
 const GITHUB_REPO   = 'windoll/game-announcements';
 const GITHUB_BRANCH = 'main';
 
-const _imgCache = imgCacheStore.load();
-
-function _saveImgCache() {
-  imgCacheStore.save(_imgCache);
-}
-
-// 產生 imgCache key（日期 + 類型，避免同日期不同類型互相覆蓋）
-function _imgCacheKey(annDate, annType) {
-  return annDate + '_' + (annType || '');
-}
-
-// 取得指定語系的圖片 URL（相容舊格式）
+// 取得指定語系的圖片 URL（直接從 allData/pastData 讀，Sheet 為唯一來源）
 function _getImgUrl(annDate, lang, annType) {
-  const key = _imgCacheKey(annDate, annType);
-  const entry = _imgCache[key] || _imgCache[annDate]; // 舊 key 相容
-  if (!entry) return '';
-  if (typeof entry === 'string') return entry;
-  return entry[lang] || entry['ALL'] || '';
-}
-
-// 設定指定語系的圖片 URL
-function _setImgUrl(annDate, lang, url, annType) {
-  const key = _imgCacheKey(annDate, annType);
-  if (!_imgCache[key] || typeof _imgCache[key] === 'string') {
-    const old = typeof _imgCache[key] === 'string' ? _imgCache[key] : '';
-    _imgCache[key] = old ? { ALL: old, TW: old, CN: old, JP: old, EN: old } : {};
-  }
-  if (lang === 'ALL') {
-    LANGS.forEach(l => { _imgCache[key][l] = url; });
-    _imgCache[key]['ALL'] = url;
-  } else {
-    _imgCache[key][lang] = url;
-  }
+  const ann = [...allData, ...pastData].find(a => a.date === annDate && a.type === annType);
+  if (!ann) return '';
+  const langKey = { TW: 'imgTW', CN: 'imgCN', JP: 'imgJP', EN: 'imgEN' };
+  if (lang === 'ALL') return ann.imgTW || ann.imgCN || ann.imgJP || ann.imgEN || '';
+  return ann[langKey[lang]] || '';
 }
 
 
@@ -1723,16 +1670,23 @@ async function _githubListImages(token, folder) {
 }
 
 async function clearAnnImg(annDate, annType, lang) {
-  const key = _imgCacheKey(annDate, annType);
-  if (_imgCache[key] && typeof _imgCache[key] === 'object') {
-    if (lang === 'ALL') {
-      LANGS.forEach(l => delete _imgCache[key][l]);
-      delete _imgCache[key]['ALL'];
-    } else {
-      delete _imgCache[key][lang];
-    }
+  const ann = [...allData, ...pastData].find(a => a.date === annDate && a.type === annType);
+  if (!ann || !ann._rowIndex) {
+    toast('⚠️ 找不到對應的公告列號，無法清除');
+    return;
   }
-  _saveImgCache();
+  try {
+    await sheetsWriteImgUrl(ann._rowIndex, lang, '');
+  } catch(e) {
+    toast(`⚠️ 清除失敗：${e.message}`);
+    return;
+  }
+  const langKey = { TW: 'imgTW', CN: 'imgCN', JP: 'imgJP', EN: 'imgEN' };
+  if (lang === 'ALL') {
+    LANGS.forEach(l => { ann[langKey[l]] = ''; });
+  } else {
+    ann[langKey[lang]] = '';
+  }
   renderList();
 }
 
@@ -1863,37 +1817,35 @@ async function _imgLibLoadFolder(folder) {
   }
 }
 
-function selectImgFromLibrary(e, url) {
-  _setImgUrl(_imgLibState.annDate, _imgLibState.lang, url, _imgLibState.annType);
-  _saveImgCache();
+async function selectImgFromLibrary(e, url) {
+  const { annDate, annType, lang } = _imgLibState;
+  const ann = [...allData, ...pastData].find(a => a.date === annDate && a.type === annType);
+  if (!ann || !ann._rowIndex) {
+    toast('⚠️ 找不到對應的公告列號，無法寫入 Sheet');
+    return;
+  }
+
+  // 先寫入 Sheet，成功再更新 UI
+  try {
+    await sheetsWriteImgUrl(ann._rowIndex, lang, url);
+  } catch(e) {
+    toast(`⚠️ 寫入 Sheet 失敗：${e.message}`);
+    console.warn('sheetsWrite failed', e);
+    return;
+  }
+
+  // 寫入成功：更新 in-memory 資料
+  const langKey = { TW: 'imgTW', CN: 'imgCN', JP: 'imgJP', EN: 'imgEN' };
+  if (lang === 'ALL') {
+    LANGS.forEach(l => { ann[langKey[l]] = url; });
+  } else {
+    ann[langKey[lang]] = url;
+  }
+
   document.querySelectorAll('.img-lib-thumb').forEach(el => el.classList.remove('selected'));
   e.currentTarget.classList.add('selected');
   _imgLibRenderLangTabs();
-  toast(`✅ 已套用到 ${_imgLibState.lang}`);
-
-  // 非同步寫回 Sheet（不阻擋 UI）
-  _sheetsWriteImgFromLibrary(_imgLibState.annDate, _imgLibState.annType, _imgLibState.lang, url);
-}
-
-async function _sheetsWriteImgFromLibrary(annDate, annType, lang, url) {
-  // 從 allData / pastData 找對應的 _rowIndex
-  const ann = [...allData, ...pastData].find(a => a.date === annDate && a.type === annType);
-  if (!ann || !ann._rowIndex) {
-    console.warn('sheetsWrite: 找不到對應的列號', annDate, annType);
-    return;
-  }
-  try {
-    await sheetsWriteImgUrl(ann._rowIndex, lang, url);
-    toast(`☁ 已同步寫入 Sheet（${lang}）`);
-  } catch(e) {
-    // OAuth 未登入時不強制提示，只在 console 記錄
-    if (e.message.includes('尚未登入')) {
-      console.info('sheetsWrite: 尚未登入 Google，僅存本地快取');
-    } else {
-      toast(`⚠️ 寫入 Sheet 失敗：${e.message}`);
-      console.warn('sheetsWrite failed', e);
-    }
-  }
+  toast(`✅ 已套用並寫入 Sheet（${lang}）`);
 }
 
 function closeImgLibrary() {
@@ -2061,17 +2013,13 @@ function _imgMgrParseItems(items) {
 function imgMgrGoTo(folder) { imgMgrLoad(folder); }
 function imgMgrRefresh()    { delete _imgMgr.cache[_imgMgr.folder]; imgMgrLoad(_imgMgr.folder); }
 
-// ── 找出 _imgCache 中使用此 URL 的公告 ──────────────────────
+// ── 找出使用此 URL 的公告（從 allData/pastData 找）──────────
 
 function _imgMgrFindUsage(rawUrl) {
   const norm = rawUrl.split('?')[0].toLowerCase();
-  return Object.entries(_imgCache)
-    .filter(([, val]) => {
-      if (typeof val === 'string') return val.split('?')[0].toLowerCase() === norm;
-      return val && typeof val === 'object' &&
-        Object.values(val).some(u => u && u.split('?')[0].toLowerCase() === norm);
-    })
-    .map(([key]) => key);
+  return [...allData, ...pastData]
+    .filter(a => ['imgTW','imgCN','imgJP','imgEN'].some(k => a[k] && a[k].split('?')[0].toLowerCase() === norm))
+    .map(a => a.date + '_' + (a.type || ''));
 }
 
 // ══ 上傳 Modal ════════════════════════════════════════════════
