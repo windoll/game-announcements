@@ -482,6 +482,10 @@ function showPage(name, e) {
 }
 
 // ══ MODULE: SHEET ════════════════════════════════════════════════
+
+// 動態欄位字母對應（由 _parseSheetRows 填入，供 tq 查詢和寫入使用）
+let _sheetColMap = { dateLetter: 'F', imgTW: 'H', imgCN: 'I', imgJP: 'J', imgEN: 'K' };
+
 // ── 共用：解析 gviz table rows ───────────────────────────────
 
 function _parseSheetRows(tbl) {
@@ -505,6 +509,20 @@ function _parseSheetRows(tbl) {
     rowNum:    headers.indexOf('列號'),
   };
   if (ix.date === -1) Object.assign(ix, {date:0,time:1,type:2,titleTW:3,contentTW:4,titleCN:-1,contentCN:-1,titleJP:5,contentJP:6,titleEN:7,contentEN:8});
+
+  // 更新動態欄位字母（索引轉 A/B/C/...，超過 Z 用 AA/AB 等）
+  const idxToLetter = i => {
+    let s = '';
+    i++;
+    while (i > 0) { s = String.fromCharCode(64 + (i % 26 || 26)) + s; i = Math.floor((i - 1) / 26); }
+    return s;
+  };
+  const setCol = (key, idx) => { if (idx >= 0) _sheetColMap[key] = idxToLetter(idx); };
+  setCol('dateLetter', ix.date);
+  setCol('imgTW',  ix.imgTW);
+  setCol('imgCN',  ix.imgCN);
+  setCol('imgJP',  ix.imgJP);
+  setCol('imgEN',  ix.imgEN);
 
   const getD = (row, i) => {
     if (i < 0 || !row.c || !row.c[i] || row.c[i].v === null) return '';
@@ -550,6 +568,24 @@ function _parseSheetRows(tbl) {
 
 
 
+// 先取得 headers 更新 _sheetColMap，讓後續 tq 使用正確欄位字母
+let _colMapResolved = false;
+async function _resolveSheetColMap(sheetId, sheetGid) {
+  if (_colMapResolved) return;
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${sheetGid}&headers=1&tq=${encodeURIComponent('select * limit 0')}`;
+    const res  = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.replace(/^[^{]*/, '').replace(/\);?\s*$/, ''));
+    if (json.table) {
+      _parseSheetRows(json.table); // 副作用：更新 _sheetColMap
+      _colMapResolved = true;
+    }
+  } catch(e) {
+    console.warn('_resolveSheetColMap 失敗，使用預設欄位字母', e);
+  }
+}
+
 let _isLoadingSheet = false;
 
 async function loadSheet() {
@@ -560,9 +596,10 @@ async function loadSheet() {
   document.getElementById('list-updated').textContent = '載入中...';
 
   const { sheetId, sheetGid } = getCfg();
-  // F 欄是完整日期，只載入今天以後的（即將發布 + 今日）
-  const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const tq = encodeURIComponent(`select * where F >= date '${todayStr}' or F is null`);
+  await _resolveSheetColMap(sheetId, sheetGid);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const col = _sheetColMap.dateLetter;
+  const tq = encodeURIComponent(`select * where ${col} >= date '${todayStr}'`);
   const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${sheetGid}&headers=1&tq=${tq}`;
 
   try {
@@ -605,8 +642,10 @@ async function loadPastSheet() {
   document.getElementById('list-area').innerHTML = '<div class="loading">⏳ 正在讀取過期公告...</div>';
 
   const { sheetId, sheetGid } = getCfg();
+  await _resolveSheetColMap(sheetId, sheetGid);
   const todayStr = new Date().toISOString().slice(0, 10);
-  const tq  = encodeURIComponent(`select * where F < date '${todayStr}' order by F desc`);
+  const col = _sheetColMap.dateLetter;
+  const tq  = encodeURIComponent(`select * where ${col} < date '${todayStr}' order by ${col} desc`);
   const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${sheetGid}&headers=1&tq=${tq}`;
 
   try {
@@ -2610,8 +2649,8 @@ async function sheetsWriteImgUrl(rowIndex, lang, url) {
 
   const accessToken = await gauthGetAccessToken();
 
-  // H=TW圖片, I=CN圖片, J=JP圖片, K=EN圖片
-  const langCol = { TW: 'H', CN: 'I', JP: 'J', EN: 'K' };
+  // 欄位字母從 _sheetColMap 動態取得
+  const langCol = { TW: _sheetColMap.imgTW, CN: _sheetColMap.imgCN, JP: _sheetColMap.imgJP, EN: _sheetColMap.imgEN };
 
   const targets = lang === 'ALL'
     ? Object.entries(langCol).map(([l, col]) => ({ lang: l, col }))
