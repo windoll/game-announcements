@@ -457,7 +457,7 @@ async function checkPassword() {
   if (hashHex === PAGE_PASSWORD_HASH) {
     sessionStorage.setItem('unlocked', '1');
     document.getElementById('lock-screen').style.display = 'none';
-    document.getElementById('main-app').style.display = '';
+    document.getElementById('main-app').classList.remove('hidden');
     initApp();
   } else {
     document.getElementById('lock-error').textContent = '密碼錯誤，請再試一次';
@@ -2672,7 +2672,7 @@ async function sheetsWriteImgUrl(rowIndex, lang, url) {
 window.addEventListener('DOMContentLoaded', () => {
   if (sessionStorage.getItem('unlocked') === '1') {
     document.getElementById('lock-screen').style.display = 'none';
-    document.getElementById('main-app').style.display = '';
+    document.getElementById('main-app').classList.remove('hidden');
     initApp();
   } else {
     applyTestModeUI(!!getCfg().testMode);
