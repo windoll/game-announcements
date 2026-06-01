@@ -1818,6 +1818,7 @@ async function _imgLibLoadFolder(folder) {
 }
 
 async function selectImgFromLibrary(e, url) {
+  const clickedEl = e.currentTarget; // 在 await 前先存起來
   const { annDate, annType, lang } = _imgLibState;
   const ann = [...allData, ...pastData].find(a => a.date === annDate && a.type === annType);
   if (!ann || !ann._rowIndex) {
@@ -1843,7 +1844,7 @@ async function selectImgFromLibrary(e, url) {
   }
 
   document.querySelectorAll('.img-lib-thumb').forEach(el => el.classList.remove('selected'));
-  e.currentTarget.classList.add('selected');
+  clickedEl?.classList.add('selected');
   _imgLibRenderLangTabs();
   toast(`✅ 已套用並寫入 Sheet（${lang}）`);
 }
