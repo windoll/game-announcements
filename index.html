@@ -169,12 +169,9 @@
         <div class="field-label">專案名稱（顯示在側邊欄）</div>
         <input type="text" id="cfg-project-name" placeholder="雀星公告管理" class="cfg-input" oninput="markCfgUnsaved()">
 
-        <div class="field-label">Google Sheet ID</div>
-        <input type="text" id="cfg-sheet-id" placeholder="試算表 ID（網址中的那段）" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
-
-        <div class="field-label">Google Sheet GID（工作表 ID）</div>
-        <input type="text" id="cfg-sheet-gid" placeholder="e.g. 1281351206" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
-        <div class="cfg-hint">在試算表網址 ?gid= 後面的數字</div>
+        <div class="field-label">Google Sheet 網址</div>
+        <input type="text" id="cfg-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/.../edit?gid=..." class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
+        <div class="cfg-hint">貼上試算表完整網址，系統會自動拆解 ID 和工作表 GID</div>
 
         <div class="field-label">GitHub Repo</div>
         <input type="text" id="cfg-github-repo" placeholder="username/repo-name" class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
@@ -186,11 +183,9 @@
         <input type="password" id="cfg-github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
         <div class="cfg-hint-top">用於上傳圖片到 GitHub repo</div>
 
-        <div class="field-label">N8N Webhook（正式）</div>
-        <input type="text" id="cfg-n8n-webhook-prod" placeholder="https://...app.n8n.cloud/webhook/..." class="cfg-input cfg-input-mono" oninput="markCfgUnsaved()">
-
-        <div class="field-label">N8N Webhook（測試）</div>
-        <input type="text" id="cfg-n8n-webhook-test" placeholder="https://...app.n8n.cloud/webhook-test/..." class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
+        <div class="field-label">N8N Webhook URL</div>
+        <input type="text" id="cfg-n8n-webhook-prod" placeholder="https://...app.n8n.cloud/webhook/..." class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
+        <div class="cfg-hint">測試模式時自動將 /webhook/ 替換為 /webhook-test/</div>
       </div>
 
       <!-- Google OAuth -->
@@ -363,7 +358,6 @@ const DEFAULTS = {
   githubRepo:      '',
   githubBranch:    'main',
   n8nWebhookProd:  '',
-  n8nWebhookTest:  '',
   announcementTypes: [
     { name: '維護更新',  langs: [{ lang: 'all', webhook: '' }] },
     { name: '活動公告',  langs: [{ lang: 'TW', webhook: '' }, { lang: 'JP', webhook: '' }, { lang: 'EN', webhook: '' }] }
@@ -378,7 +372,12 @@ const DEFAULTS = {
 const PAGE_PASSWORD_HASH = '8ad92bcf60f575e55e61394d556b2fe34b946fc779e8963a8670f13e164ba199';
 const SECRET_TOKEN       = 'zx9k-Q7mP-4rNw-Hj2T';
 
-function N8N_WEBHOOK() { const cfg = getCfg(); return cfg.testMode ? cfg.n8nWebhookTest : cfg.n8nWebhookProd; }
+function N8N_WEBHOOK() {
+  const cfg = getCfg();
+  const prod = cfg.n8nWebhookProd || '';
+  if (!cfg.testMode) return prod;
+  return prod.replace('/webhook/', '/webhook-test/');
+}
 function GITHUB_REPO()   { return getCfg().githubRepo; }
 function GITHUB_BRANCH() { return getCfg().githubBranch || 'main'; }
 
@@ -1234,13 +1233,17 @@ async function confirmSend() {
 function loadSettings() {
   const cfg = getCfg();
   document.getElementById('cfg-project-name').value     = cfg.projectName     || '';
-  document.getElementById('cfg-sheet-id').value         = cfg.sheetId         || '';
-  document.getElementById('cfg-sheet-gid').value        = cfg.sheetGid        || '';
+  // 從 sheetId + sheetGid 組回網址顯示
+  if (cfg.sheetId) {
+    document.getElementById('cfg-sheet-url').value =
+      `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/edit?gid=${cfg.sheetGid || '0'}`;
+  } else {
+    document.getElementById('cfg-sheet-url').value = '';
+  }
   document.getElementById('cfg-github-repo').value      = cfg.githubRepo      || '';
   document.getElementById('cfg-github-branch').value    = cfg.githubBranch    || 'main';
   document.getElementById('cfg-github-token').value     = cfg.githubToken     || '';
   document.getElementById('cfg-n8n-webhook-prod').value = cfg.n8nWebhookProd  || '';
-  document.getElementById('cfg-n8n-webhook-test').value = cfg.n8nWebhookTest  || '';
   document.getElementById('cfg-oauth-client-id').value     = cfg.oauthClientId     || '';
   document.getElementById('cfg-oauth-client-secret').value  = cfg.oauthClientSecret  || '';
   gauthRenderStatus();
@@ -1425,13 +1428,16 @@ function saveSettings() {
   const cfg = getCfg();
   const updated = Object.assign({}, cfg, {
     projectName:     document.getElementById('cfg-project-name').value.trim(),
-    sheetId:         document.getElementById('cfg-sheet-id').value.trim(),
-    sheetGid:        document.getElementById('cfg-sheet-gid').value.trim(),
+    ...(() => {
+      const raw = document.getElementById('cfg-sheet-url').value.trim();
+      const idM  = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+      const gidM = raw.match(/[?&#]gid=(\d+)/);
+      return { sheetId: idM ? idM[1] : '', sheetGid: gidM ? gidM[1] : '0' };
+    })(),
     githubRepo:      document.getElementById('cfg-github-repo').value.trim(),
     githubBranch:    document.getElementById('cfg-github-branch').value.trim() || 'main',
     githubToken:     document.getElementById('cfg-github-token').value.trim(),
     n8nWebhookProd:  document.getElementById('cfg-n8n-webhook-prod').value.trim(),
-    n8nWebhookTest:  document.getElementById('cfg-n8n-webhook-test').value.trim(),
     oauthClientId:     document.getElementById('cfg-oauth-client-id').value.trim(),
     oauthClientSecret: document.getElementById('cfg-oauth-client-secret').value.trim(),
   });
