@@ -1532,7 +1532,8 @@ function onErolabsMaintChange() {
   yesLabel.style.background  = val === 'yes' ? '#f5f3ff' : '';
   noLabel.style.borderColor  = val === 'no'  ? '#4f46e5' : 'var(--border)';
   noLabel.style.background   = val === 'no'  ? '#f5f3ff' : '';
-  wrap.style.display = val === 'yes' ? 'block' : 'none';
+  if (val === 'yes') wrap.classList.remove('hidden');
+  else wrap.classList.add('hidden');
 }
 
 function closeErolabsModal() {
