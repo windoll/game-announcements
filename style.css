@@ -258,6 +258,9 @@ body {
   padding: 0 1px; border-radius: 50%;
 }
 .scheduled-badge-del:hover { opacity: 1; }
+.scheduled-badge-past {
+  background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb;
+}
 
 /* ── 過去公告補發按鈕 ── */
 .btn-past-send {

@@ -814,27 +814,24 @@ function _getScheduleBadgesHtml(annDate, schedulesAll) {
   if (!records.length) return '';
 
   const now = new Date();
-  const valid = records.filter(r => {
+
+  const withStatus = records.map(r => {
     const [mm, dd] = r.sendDate.split('/').map(Number);
     const [hh, mi] = r.sendTime.split(':').map(Number);
     const t = new Date(now.getFullYear(), mm - 1, dd, hh, mi);
     const mDiff = mm - (now.getMonth() + 1);
     if (mDiff > 6)  t.setFullYear(t.getFullYear() - 1);
     if (mDiff < -6) t.setFullYear(t.getFullYear() + 1);
-    return t > now;
+    return { r, isPast: t <= now };
   });
 
-  if (valid.length !== records.length) {
-    schedulesAll[annDate] = valid;
-    scheduleStore.save(schedulesAll);
-  }
-
-  return valid.map(r => {
+  return withStatus.map(({ r, isPast }) => {
     const label = `✈️ ${escHtml(r.sendDate)} ${escHtml(r.sendTime)}${r.typeName ? ' · ' + escHtml(r.typeName) : ''}`;
     const safeAnnDate  = escHtml(annDate);
     const safeSendDate = escHtml(r.sendDate);
     const safeSendTime = escHtml(r.sendTime);
-    return `<span class="scheduled-badge">${label}<span class="scheduled-badge-del" onclick="stopProp(event);deleteSchedule('${safeAnnDate}','${safeSendDate}','${safeSendTime}')" title="刪除此排程記錄">✕</span></span>`;
+    const cls = isPast ? 'scheduled-badge scheduled-badge-past' : 'scheduled-badge';
+    return `<span class="${cls}">${label}<span class="scheduled-badge-del" onclick="stopProp(event);deleteSchedule('${safeAnnDate}','${safeSendDate}','${safeSendTime}')" title="刪除此排程記錄">✕</span></span>`;
   }).join(' ');
 }
 
