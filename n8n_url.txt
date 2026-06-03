@@ -1,1 +1,1 @@
-|/webhook/send-announcement  
+https://dominant-tradition-fate-alternatively.trycloudflare.com/webhook/send-announcement  
