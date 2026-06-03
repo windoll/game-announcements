@@ -1,1 +1,0 @@
-https://theatre-deluxe-guestbook-exercise.trycloudflare.com/webhook/send-announcement  
