@@ -451,6 +451,20 @@ async function checkPassword() {
 
 function initApp() {
   applyTestModeUI(!!getCfg().testMode);
+  // 自動讀取 n8n_url.txt 更新 webhook URL
+  fetch('./n8n_url.txt?t=' + Date.now())
+    .then(r => r.ok ? r.text() : null)
+    .then(url => {
+      if (!url) return;
+      url = url.trim();
+      if (!url) return;
+      const cfg = getCfg();
+      if (cfg.n8nWebhookProd !== url) {
+        cfg.n8nWebhookProd = url;
+        cfgStore.set(cfg);
+      }
+    })
+    .catch(() => {});
 }
 
 // ══ MODULE: STATE ════════════════════════════════════════════════
