@@ -212,9 +212,8 @@
       <!-- N8N -->
       <div class="card card-no-top">
         <div class="cfg-section-title">⚡ N8N</div>
-        <div class="field-label">Webhook URL</div>
-        <input type="text" id="cfg-n8n-webhook-prod" placeholder="https://...app.n8n.cloud/webhook/..." class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
-        <div class="cfg-hint">測試模式時自動將 /webhook/ 替換為 /webhook-test/</div>
+        <div class="cfg-hint">Webhook URL 由系統自動抓取，無需手動設定。</div>
+        <input type="hidden" id="cfg-n8n-webhook-prod">
       </div>
 
       <!-- 測試模式開關 -->
@@ -1437,7 +1436,7 @@ function saveSettings() {
     githubRepo:      document.getElementById('cfg-github-repo').value.trim(),
     githubBranch:    document.getElementById('cfg-github-branch').value.trim() || 'main',
     githubToken:     document.getElementById('cfg-github-token').value.trim(),
-    n8nWebhookProd:  document.getElementById('cfg-n8n-webhook-prod').value.trim(),
+    n8nWebhookProd:  getCfg().n8nWebhookProd || '',
     oauthClientId:     document.getElementById('cfg-oauth-client-id').value.trim(),
     oauthClientSecret: document.getElementById('cfg-oauth-client-secret').value.trim(),
   });
@@ -1450,7 +1449,8 @@ function saveSettings() {
 
 function exportSettings() {
   const cfg  = getCfg();
-  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+  const { n8nWebhookProd, ...exportCfg } = cfg;
+  const blob = new Blob([JSON.stringify(exportCfg, null, 2)], { type: 'application/json' });
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
   a.download = '雀星公告設定.json';
