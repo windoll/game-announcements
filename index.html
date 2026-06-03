@@ -213,8 +213,8 @@
       <div class="card card-no-top">
         <div class="cfg-section-title">⚡ N8N</div>
         <div class="field-label">Webhook URL</div>
-        <input type="text" id="cfg-n8n-webhook-prod" class="cfg-input cfg-input-mono" style="margin-bottom:0;" readonly>
-        <div class="cfg-hint">由系統自動抓取，無需手動設定。</div>
+        <input type="text" id="cfg-n8n-webhook-prod" placeholder="https://...app.n8n.cloud/webhook/..." class="cfg-input cfg-input-mono" style="margin-bottom:0;" oninput="markCfgUnsaved()">
+        <div class="cfg-hint">測試模式時自動將 /webhook/ 替換為 /webhook-test/</div>
       </div>
 
       <!-- 測試模式開關 -->
@@ -1425,7 +1425,7 @@ function saveSettings() {
     githubRepo:      document.getElementById('cfg-github-repo').value.trim(),
     githubBranch:    document.getElementById('cfg-github-branch').value.trim() || 'main',
     githubToken:     document.getElementById('cfg-github-token').value.trim(),
-    n8nWebhookProd:  getCfg().n8nWebhookProd || '',
+    n8nWebhookProd:  document.getElementById('cfg-n8n-webhook-prod').value.trim(),
     oauthClientId:     document.getElementById('cfg-oauth-client-id').value.trim(),
     oauthClientSecret: document.getElementById('cfg-oauth-client-secret').value.trim(),
   });
@@ -1438,8 +1438,7 @@ function saveSettings() {
 
 function exportSettings() {
   const cfg  = getCfg();
-  const { n8nWebhookProd, ...exportCfg } = cfg;
-  const blob = new Blob([JSON.stringify(exportCfg, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
   a.download = '雀星公告設定.json';
@@ -2680,20 +2679,7 @@ async function sheetsWriteDiscordSchedule(rowIndex, value) {
 // ══ MODULE: INIT ═════════════════════════════════════════════════
 
 
-window.addEventListener('DOMContentLoaded', async () => {
-  // 先抓 n8n_url.txt 存進 cfg，再啟動
-  try {
-    const r = await fetch('./n8n_url.txt?t=' + Date.now());
-    if (r.ok) {
-      const url = (await r.text()).trim();
-      if (url) {
-        const cfg = getCfg();
-        cfg.n8nWebhookProd = url;
-        cfgStore.set(cfg);
-      }
-    }
-  } catch (_) {}
-
+window.addEventListener('DOMContentLoaded', () => {
   if (sessionStorage.getItem('unlocked') === '1') {
     document.getElementById('lock-screen').style.display = 'none';
     document.getElementById('main-app').classList.remove('hidden');
