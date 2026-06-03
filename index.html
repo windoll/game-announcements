@@ -462,6 +462,8 @@ function initApp() {
       if (cfg.n8nWebhookProd !== url) {
         cfg.n8nWebhookProd = url;
         cfgStore.set(cfg);
+        const el = document.getElementById('cfg-n8n-webhook-prod');
+        if (el) el.value = url;
       }
     })
     .catch(() => {});
