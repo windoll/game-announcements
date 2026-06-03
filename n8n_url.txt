@@ -1,1 +1,1 @@
-trycloudflare.com.../webhook/send-announcement
+https://recording-originally-pole-turning.trycloudflare.com/webhook/send-announcement
